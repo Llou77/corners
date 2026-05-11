@@ -1,4 +1,4 @@
-# Corner Prophet ⚽ — Premier League Szöglet Előrejelző
+# Daily Corners Predictor ⚽ — (egyelőre csak) Premier League Szöglet Előrejelző
 
 Statisztikai modell alapján előrejelzi az Premier League mérkőzések várható szögletszámát.
 
