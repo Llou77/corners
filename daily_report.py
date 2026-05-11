@@ -21,11 +21,11 @@ HIST_FILE = f"{PRED_DIR}/history.json"
 SUM_FILE  = f"{PRED_DIR}/summary.json"
 
 CSV_FILES = {
+    "2025/26": f"{DATA_DIR}/E0_2526.csv",
     "2024/25": f"{DATA_DIR}/E0_2425.csv",
     "2023/24": f"{DATA_DIR}/E0_2324.csv",
-    "2022/23": f"{DATA_DIR}/E0_2223.csv",
 }
-SEASON_W = {"2024/25": 0.6, "2023/24": 0.3, "2022/23": 0.1}
+SEASON_W = {"2025/26": 0.6, "2024/25": 0.3, "2023/24": 0.1}
 
 # ── HELPERS ───────────────────────────────────────────────────────────────────
 

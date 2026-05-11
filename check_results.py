@@ -15,7 +15,7 @@ FDORG_TOKEN = os.environ.get("FDORG_TOKEN", "")
 PRED_DIR  = "predictions"
 HIST_FILE = f"{PRED_DIR}/history.json"
 SUM_FILE  = f"{PRED_DIR}/summary.json"
-SEASON_W  = {"2024/25": 0.6, "2023/24": 0.3, "2022/23": 0.1}
+SEASON_W  = {"2025/26": 0.6, "2024/25": 0.3, "2023/24": 0.1}
 
 def load_json(path, default):
     try:

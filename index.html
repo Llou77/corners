@@ -127,11 +127,11 @@ footer{margin-top:40px;padding-top:20px;border-top:1px solid var(--brd);font-siz
       <p>Premier League &bull; Sz&ouml;glet El&#337;rejelz&#337; &bull; v0.5</p>
     </div>
   </div>
-  <div class="badge"><div class="dot"></div><span>2022&ndash;25 szezon</span></div>
+  <div class="badge"><div class="dot"></div><span>2023&ndash;26 szezon</span></div>
 </header>
 
 <div id="sbar">
-  <div class="si"><div class="sd ld" id="d1"></div><span id="l1">Adatok bet&ouml;lt&eacute;se...</span></div>
+  <div class="si"><div class="sd ld" id="d1"></div><span id="l1">2025/26 bet&ouml;lt&eacute;s...</span></div>
   <div class="si" id="mci" style="margin-left:auto;display:none"><span id="mcl" style="color:var(--acc3)"></span></div>
 </div>
 
@@ -193,7 +193,7 @@ footer{margin-top:40px;padding-top:20px;border-top:1px solid var(--brd);font-siz
 </div>
 
 <footer>
-  <span>Adatforr&aacute;s: football-data.co.uk &bull; Szezonok: 2022/23, 2023/24, 2024/25</span>
+  <span>Adatforr&aacute;s: football-data.co.uk &bull; Szezonok: 2023/24, 2024/25, 2025/26</span>
   <span>Corner Prophet &bull; Csak t&aacute;j&eacute;koztat&oacute; c&eacute;lra &bull; Nem fogad&aacute;si tan&aacute;cs</span>
 </footer>
 </div>
@@ -203,9 +203,9 @@ footer{margin-top:40px;padding-top:20px;border-top:1px solid var(--brd);font-siz
 // CSV-k forrása: football-data.co.uk
 // GitHub Pages-en a /data/ mappából tölt; ha nem sikerül, beégetett sample adat
 var CSV_FILES = [
+  'data/E0_2526.csv',
   'data/E0_2425.csv',
-  'data/E0_2324.csv',
-  'data/E0_2223.csv'
+  'data/E0_2324.csv'
 ];
 
 var AM = [], T = [];
@@ -246,7 +246,9 @@ async function loadAll() {
       var r = await fetch(CSV_FILES[i]);
       if (!r.ok) throw new Error('HTTP ' + r.status);
       var txt = await r.text();
-      var ms = parseCSV(txt, CSV_FILES[i]);
+      var label = CSV_FILES[i].indexOf('2526') >= 0 ? '2025/26' :
+               CSV_FILES[i].indexOf('2425') >= 0 ? '2024/25' : '2023/24';
+  var ms = parseCSV(txt, label);
       if (ms.length > 0) { all = all.concat(ms); loaded++; }
     } catch(e) { /* skip */ }
   }
@@ -287,7 +289,7 @@ async function loadAll() {
 // ── MODEL v0.3 ───────────────────────────────────────────────────────────────
 
 // Season weights: 2024/25=60%, 2023/24=30%, 2022/23=10%
-var SEASON_W = { '2024/25': 0.6, '2023/24': 0.3, '2022/23': 0.1 };
+var SEASON_W = { '2025/26': 0.6, '2024/25': 0.3, '2023/24': 0.1 };
 function sw(m) { return SEASON_W[m._s] || 0.1; }
 
 function pDate(d) {
