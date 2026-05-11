@@ -171,7 +171,7 @@ def predict(matches, home_team, away_team, win=7):
 
 def format_telegram(fixtures, predictions, today):
     lines = [
-        f"⚽ *Corner Prophet — Napi Report*",
+        f"⚽ *Corners Prediction — Napi jelentés*",
         f"📅 {today} | Premier League",
         "━━━━━━━━━━━━━━━━━━━━━",
     ]
@@ -197,7 +197,7 @@ def format_telegram(fixtures, predictions, today):
             lines.append("  ⚠️ Nincs elegendő adat az előrejelzéshez")
         lines.append("─────────────────────")
 
-    lines.append("\n_Corner Prophet v0.3 • Csak tájékoztató célra_")
+    lines.append("\n_Daily Corners v0.3 • Csak tájékoztató célra_")
     return "\n".join(lines)
 
 # ── KÜLDÉS ────────────────────────────────────────────────────────────────────
