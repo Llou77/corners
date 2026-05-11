@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html lang="hu">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Corner Prophet — PL Szöglet Előrejelző</title>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;600;700;900&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#0a0c10;--surf:#10141c;--surf2:#161c28;--brd:#1e2736;--acc:#00e5ff;--acc2:#ff6b35;--acc3:#a8ff3e;--txt:#e8eaf0;--dim:#5a6478;--mid:#8892a4}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--txt);font-family:'IBM Plex Mono',monospace;min-height:100vh}
+body::before{content:'';position:fixed;inset:0;background-image:linear-gradient(rgba(0,229,255,.03) 1px,transparent 1px),linear-gradient(90deg,rgba(0,229,255,.03) 1px,transparent 1px);background-size:40px 40px;pointer-events:none;z-index:0}
+.wrap{position:relative;z-index:1;max-width:1100px;margin:0 auto;padding:0 24px 60px}
+header{padding:32px 0 24px;border-bottom:1px solid var(--brd);margin-bottom:32px;display:flex;align-items:flex-end;justify-content:space-between;flex-wrap:wrap;gap:12px}
+.logo{display:flex;align-items:center;gap:14px}
+.logo-ico{width:48px;height:48px;background:var(--acc);clip-path:polygon(50% 0%,100% 25%,100% 75%,50% 100%,0% 75%,0% 25%);display:grid;place-items:center;font-size:20px;animation:glow 3s ease-in-out infinite;flex-shrink:0}
+@keyframes glow{0%,100%{box-shadow:0 0 20px rgba(0,229,255,.4)}50%{box-shadow:0 0 40px rgba(0,229,255,.8)}}
+.logo-text h1{font-family:'Barlow Condensed',sans-serif;font-size:2rem;font-weight:900;color:var(--acc);text-transform:uppercase;line-height:1;letter-spacing:.05em}
+.logo-text p{font-size:.65rem;color:var(--dim);letter-spacing:.15em;text-transform:uppercase;margin-top:2px}
+.badge{display:flex;align-items:center;gap:8px;background:#38003c;border:1px solid rgba(0,212,160,.3);padding:6px 14px;font-size:.7rem;color:#00d4a0;text-transform:uppercase;letter-spacing:.1em}
+.dot{width:7px;height:7px;background:#00d4a0;border-radius:50%;animation:blink 1.5s ease-in-out infinite}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.2}}
+#sbar{background:var(--surf);border:1px solid var(--brd);padding:10px 20px;font-size:.7rem;color:var(--mid);margin-bottom:24px;display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+.si{display:flex;align-items:center;gap:6px}
+.sd{width:6px;height:6px;border-radius:50%;flex-shrink:0}
+.sd.ok{background:var(--acc3)}.sd.ld{background:var(--acc);animation:blink 1s infinite}.sd.er{background:var(--acc2)}
+.panel{background:var(--surf);border:1px solid var(--brd);padding:28px;margin-bottom:24px}
+.panel-title{font-family:'Barlow Condensed',sans-serif;font-size:.9rem;font-weight:600;letter-spacing:.15em;text-transform:uppercase;color:var(--mid);margin-bottom:20px}
+.tsel{display:grid;grid-template-columns:1fr auto 1fr;gap:16px;align-items:center;margin-bottom:22px}
+.ts label{display:block;font-size:.6rem;letter-spacing:.15em;text-transform:uppercase;color:var(--dim);margin-bottom:8px}
+.ts select{width:100%;background:var(--bg);border:1px solid var(--brd);color:var(--txt);font-family:'Barlow Condensed',sans-serif;font-size:1.1rem;font-weight:700;padding:12px 16px;appearance:none;cursor:pointer;outline:none;transition:border-color .2s}
+.ts select:focus{border-color:var(--acc)}
+.vs{font-family:'Barlow Condensed',sans-serif;font-size:1.4rem;font-weight:900;color:var(--dim);text-align:center;padding-top:22px}
+.opts{display:grid;grid-template-columns:repeat(auto-fit,minmax(175px,1fr));gap:14px;margin-bottom:22px}
+.og label{display:block;font-size:.6rem;letter-spacing:.15em;text-transform:uppercase;color:var(--dim);margin-bottom:7px}
+.og select{width:100%;background:var(--bg);border:1px solid var(--brd);color:var(--txt);font-family:'IBM Plex Mono',monospace;font-size:.82rem;padding:9px 12px;appearance:none;cursor:pointer;outline:none;transition:border-color .2s}
+.og select:focus{border-color:var(--acc)}
+#pbtn{width:100%;background:var(--acc);color:var(--bg);border:none;font-family:'Barlow Condensed',sans-serif;font-size:1.15rem;font-weight:900;letter-spacing:.15em;text-transform:uppercase;padding:15px;cursor:pointer;transition:all .2s}
+#pbtn:hover{box-shadow:0 0 30px rgba(0,229,255,.5)}#pbtn:disabled{opacity:.35;cursor:not-allowed}
+#rp{display:none;animation:fu .4s ease}
+@keyframes fu{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:translateY(0)}}
+.rhead{background:var(--surf2);border:1px solid var(--brd);border-bottom:none;padding:14px 22px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px}
+.rhead h3{font-family:'Barlow Condensed',sans-serif;font-size:.85rem;font-weight:600;letter-spacing:.15em;text-transform:uppercase;color:var(--mid)}
+.mtt{font-family:'Barlow Condensed',sans-serif;font-size:1.15rem;font-weight:700;color:var(--txt)}
+.pm{background:var(--surf);border:1px solid var(--brd);padding:36px 28px;display:grid;grid-template-columns:1fr auto 1fr;gap:20px;align-items:center;margin-bottom:1px}
+.tp{text-align:center}
+.tn{font-family:'Barlow Condensed',sans-serif;font-size:1.05rem;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--mid);margin-bottom:10px}
+.cn{font-family:'Barlow Condensed',sans-serif;font-size:4.8rem;font-weight:900;line-height:1;color:var(--acc);text-shadow:0 0 36px rgba(0,229,255,.35)}
+.cl{font-size:.6rem;letter-spacing:.2em;text-transform:uppercase;color:var(--dim);margin-top:6px}
+.totbox{background:var(--bg);border:1px solid var(--acc);padding:14px 22px;text-align:center;box-shadow:0 0 20px rgba(0,229,255,.12)}
+.totl{font-size:.58rem;letter-spacing:.2em;text-transform:uppercase;color:var(--dim);margin-bottom:5px}
+.totn{font-family:'Barlow Condensed',sans-serif;font-size:2.8rem;font-weight:900;color:var(--acc3);line-height:1;text-shadow:0 0 16px rgba(168,255,62,.35)}
+.sgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--brd);margin-bottom:1px}
+.sc{background:var(--surf);padding:18px;text-align:center}
+.sl{font-size:.58rem;letter-spacing:.15em;text-transform:uppercase;color:var(--dim);margin-bottom:7px}
+.sv{font-family:'Barlow Condensed',sans-serif;font-size:1.5rem;font-weight:700;color:var(--txt)}
+.sv.c1{color:#00d4a0}.sv.c2{color:var(--acc2)}
+.rp2{background:var(--surf);border:1px solid var(--brd);padding:22px;margin-bottom:1px}
+.rp2 h4{font-size:.6rem;letter-spacing:.15em;text-transform:uppercase;color:var(--dim);margin-bottom:18px}
+.rrow{display:grid;grid-template-columns:115px 1fr 58px;align-items:center;gap:14px;margin-bottom:12px}
+.rl{font-size:.72rem;color:var(--mid);text-align:right}
+.rt{height:5px;background:var(--brd);border-radius:3px;position:relative}
+.rf{height:100%;border-radius:3px;transition:width .9s cubic-bezier(.16,1,.3,1);position:relative}
+.rf::after{content:'';position:absolute;right:-1px;top:50%;transform:translateY(-50%);width:11px;height:11px;border-radius:50%;background:inherit;box-shadow:0 0 7px currentColor}
+.rfh{background:var(--acc)}.rfa{background:var(--acc2)}.rfb{background:var(--acc3)}
+.rv{font-family:'Barlow Condensed',sans-serif;font-size:.95rem;font-weight:700;color:var(--mid)}
+.fp{background:var(--surf);border:1px solid var(--brd);padding:22px;margin-bottom:1px}
+.fp h4{font-size:.6rem;letter-spacing:.15em;text-transform:uppercase;color:var(--dim);margin-bottom:14px}
+.fgrid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.ftt{font-family:'Barlow Condensed',sans-serif;font-size:.82rem;font-weight:600;color:var(--mid);letter-spacing:.08em;text-transform:uppercase;margin-bottom:8px}
+.frow{display:grid;grid-template-columns:70px 1fr 26px 26px;gap:5px;align-items:center;font-size:.68rem;padding:4px 0;border-bottom:1px solid var(--brd);color:var(--mid)}
+.fd{color:var(--dim);font-size:.62rem}
+.fo{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cb{font-family:'Barlow Condensed',sans-serif;font-size:.82rem;font-weight:700;text-align:center}
+.cbh{color:var(--acc)}.cba{color:var(--acc2)}
+.mp{background:var(--surf2);border:1px solid var(--brd);padding:18px 22px;display:flex;flex-wrap:wrap;gap:16px;align-items:center;justify-content:space-between}
+.mt2{font-size:.62rem;letter-spacing:.08em;text-transform:uppercase;color:var(--dim)}
+.mfml{font-size:.7rem;color:var(--mid);background:var(--bg);border:1px solid var(--brd);padding:7px 12px;word-break:break-all}
+.cbar{display:flex;align-items:center;gap:10px}
+.clbl{font-size:.62rem;letter-spacing:.08em;text-transform:uppercase;color:var(--dim);white-space:nowrap}
+.ctrk{width:110px;height:4px;background:var(--brd);border-radius:2px;overflow:hidden}
+.cfil{height:100%;background:var(--acc3);border-radius:2px;transition:width 1s ease}
+.cpct{font-family:'Barlow Condensed',sans-serif;font-size:.95rem;font-weight:700;color:var(--acc3)}
+#lding{display:none;text-align:center;padding:36px}
+.sp{width:38px;height:38px;border:2px solid var(--brd);border-top-color:var(--acc);border-radius:50%;animation:spin .8s linear infinite;margin:0 auto 14px}
+@keyframes spin{to{transform:rotate(360deg)}}
+.lt{font-size:.72rem;color:var(--dim);letter-spacing:.1em}
+#ep{display:none;background:rgba(255,107,53,.08);border:1px solid rgba(255,107,53,.3);padding:16px 22px;font-size:.78rem;color:var(--acc2);margin-bottom:14px}
+@media(max-width:620px){.tsel{grid-template-columns:1fr}.vs{padding-top:0}.pm{grid-template-columns:1fr;text-align:center}.sgrid{grid-template-columns:1fr 1fr}.fgrid{grid-template-columns:1fr}}
+footer{margin-top:40px;padding-top:20px;border-top:1px solid var(--brd);font-size:.62rem;color:var(--dim);display:flex;justify-content:space-between;flex-wrap:wrap;gap:6px}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header>
+  <div class="logo">
+    <div class="logo-ico">&#x26BD;</div>
+    <div class="logo-text">
+      <h1>Corner Prophet</h1>
+      <p>Premier League &bull; Sz&ouml;glet El&#337;rejelz&#337; &bull; v0.1</p>
+    </div>
+  </div>
+  <div class="badge"><div class="dot"></div><span>2022&ndash;25 szezon</span></div>
+</header>
+
+<div id="sbar">
+  <div class="si"><div class="sd ld" id="d1"></div><span id="l1">Adatok bet&ouml;lt&eacute;se...</span></div>
+  <div class="si" id="mci" style="margin-left:auto;display:none"><span id="mcl" style="color:var(--acc3)"></span></div>
+</div>
+
+<div class="panel">
+  <div class="panel-title">&#x26BD; M&eacute;rk&#337;z&eacute;s kiv&aacute;laszt&aacute;sa</div>
+  <div class="tsel">
+    <div class="ts"><label>Hazai csapat</label><select id="ht"><option value="">&#8212; Bet&ouml;lt&eacute;s... &#8212;</option></select></div>
+    <div class="vs">VS</div>
+    <div class="ts"><label>Vend&eacute;g csapat</label><select id="at"><option value="">&#8212; Bet&ouml;lt&eacute;s... &#8212;</option></select></div>
+  </div>
+  <div class="opts">
+    <div class="og"><label>Meccsek sz&aacute;ma</label><select id="mw"><option value="5">Utols&oacute; 5</option><option value="10" selected>Utols&oacute; 10</option><option value="20">Utols&oacute; 20</option><option value="all">&Ouml;sszes</option></select></div>
+    <div class="og"><label>Forma trend</label><select id="tw"><option value="none">Nincs (egyenl&#337;)</option><option value="linear" selected>Line&aacute;ris (&uacute;jabb = fontosabb)</option><option value="exp">Exponenci&aacute;lis</option></select></div>
+  </div>
+  <div id="ep"></div>
+  <button id="pbtn" onclick="runP()" disabled>&#x26BD; El&#337;rejelz&eacute;s futtat&aacute;sa</button>
+</div>
+
+<div id="lding"><div class="sp"></div><div class="lt">Sz&aacute;m&iacute;t&aacute;s folyamatban...</div></div>
+
+<div id="rp">
+  <div class="rhead"><h3>&#x26BD; El&#337;rejelz&eacute;s</h3><div class="mtt" id="mtt">&#8212;</div></div>
+  <div class="pm">
+    <div class="tp"><div class="tn" id="rhn">&#8212;</div><div class="cn" id="rhc">&#8212;</div><div class="cl">v&aacute;rhat&oacute; sz&ouml;glet</div></div>
+    <div><div class="totbox"><div class="totl">&Ouml;ssz v&aacute;rhat&oacute;</div><div class="totn" id="rtot">&#8212;</div><div class="cl">sz&ouml;glet</div></div></div>
+    <div class="tp"><div class="tn" id="ran">&#8212;</div><div class="cn" id="rac" style="color:var(--acc2)">&#8212;</div><div class="cl">v&aacute;rhat&oacute; sz&ouml;glet</div></div>
+  </div>
+  <div class="sgrid">
+    <div class="sc"><div class="sl">Hazai &aacute;tlag (hazai meccsek)</div><div class="sv c1" id="shf">&#8212;</div></div>
+    <div class="sc"><div class="sl">Liga &aacute;tlag / meccs</div><div class="sv" id="slg">&#8212;</div></div>
+    <div class="sc"><div class="sl">Vend&eacute;g &aacute;tlag (vend&eacute;g meccsek)</div><div class="sv c2" id="saf">&#8212;</div></div>
+    <div class="sc"><div class="sl">Kapott sz&ouml;glet (hazai)</div><div class="sv" id="sha">&#8212;</div></div>
+    <div class="sc"><div class="sl">Adatb&aacute;zis meccsek</div><div class="sv" id="stm">&#8212;</div></div>
+    <div class="sc"><div class="sl">Kapott sz&ouml;glet (vend&eacute;g)</div><div class="sv" id="saa">&#8212;</div></div>
+  </div>
+  <div class="rp2"><h4>Val&oacute;sz&iacute;n&#369;s&eacute;gi tartom&aacute;nyok</h4><div id="rb"></div></div>
+  <div class="fp"><h4>Legut&oacute;bbi meccsek &mdash; k&eacute;k = hazai sz&ouml;gletek &bull; narancs = vend&eacute;g sz&ouml;gletek</h4><div class="fgrid" id="fg"></div></div>
+  <div class="mp">
+    <div class="mt2">Model v1 &bull; Attack/Defense Index</div>
+    <div class="mfml" id="mfml">&#8212;</div>
+    <div class="cbar"><div class="clbl">Adatbiztons&aacute;g</div><div class="ctrk"><div class="cfil" id="cfil" style="width:0%"></div></div><div class="cpct" id="cpct">&#8212;</div></div>
+  </div>
+</div>
+
+<footer>
+  <span>Adatforr&aacute;s: football-data.co.uk &bull; Szezonok: 2022/23, 2023/24, 2024/25</span>
+  <span>Corner Prophet &bull; Csak t&aacute;j&eacute;koztat&oacute; c&eacute;lra &bull; Nem fogad&aacute;si tan&aacute;cs</span>
+</footer>
+</div>
+
+<script>
+// ── DATA ────────────────────────────────────────────────────────────────────
+// CSV-k forrása: football-data.co.uk
+// GitHub Pages-en a /data/ mappából tölt; ha nem sikerül, beégetett sample adat
+var CSV_FILES = [
+  'data/E0_2425.csv',
+  'data/E0_2324.csv',
+  'data/E0_2223.csv'
+];
+
+var AM = [], T = [];
+
+function parseCSV(text, label) {
+  var lines = text.trim().split('\n').filter(function(l){ return l.trim(); });
+  if (lines.length < 2) return [];
+  var hdrs = lines[0].split(',').map(function(h){ return h.trim().replace(/\r/g,''); });
+  var hIdx = hdrs.indexOf('HomeTeam'), aIdx = hdrs.indexOf('AwayTeam');
+  var hcIdx = hdrs.indexOf('HC'), acIdx = hdrs.indexOf('AC'), dtIdx = hdrs.indexOf('Date');
+  if (hcIdx < 0 || acIdx < 0) return [];
+  var rows = [];
+  for (var i = 1; i < lines.length; i++) {
+    var v = lines[i].split(',');
+    if (!v[hIdx] || !v[aIdx]) continue;
+    var hc = parseFloat(v[hcIdx]), ac = parseFloat(v[acIdx]);
+    if (isNaN(hc) || isNaN(ac)) continue;
+    rows.push({ HomeTeam: v[hIdx].trim(), AwayTeam: v[aIdx].trim(),
+                HC: hc, AC: ac,
+                Date: dtIdx >= 0 ? v[dtIdx].trim() : '',
+                _s: label });
+  }
+  return rows;
+}
+
+function setSt(cls, txt) {
+  var d = document.getElementById('d1'), l = document.getElementById('l1');
+  if (d) d.className = 'sd ' + cls;
+  if (l) l.textContent = txt;
+}
+
+async function loadAll() {
+  setSt('ld', 'Adatok betöltése...');
+  var all = [];
+  var loaded = 0;
+  for (var i = 0; i < CSV_FILES.length; i++) {
+    try {
+      var r = await fetch(CSV_FILES[i]);
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      var txt = await r.text();
+      var ms = parseCSV(txt, CSV_FILES[i]);
+      if (ms.length > 0) { all = all.concat(ms); loaded++; }
+    } catch(e) { /* skip */ }
+  }
+
+  if (all.length === 0) {
+    // Nincs adat — magyarázat megjelenítése
+    setSt('er', 'Adatok nem érhetők el — lásd a README-t a beállításhoz');
+    document.getElementById('ep').textContent = 
+      'A CSV adatfájlok hiányoznak. Lásd a README.md útmutatót a GitHub Pages beállításához, ' +
+      'vagy töltsd le az adatokat a football-data.co.uk oldalról a /data/ mappába.';
+    document.getElementById('ep').style.display = 'block';
+    return;
+  }
+
+  AM = all;
+  var ts = new Set();
+  AM.forEach(function(m){ ts.add(m.HomeTeam); ts.add(m.AwayTeam); });
+  T = Array.from(ts).sort();
+
+  var hE = document.getElementById('ht'), aE = document.getElementById('at');
+  hE.innerHTML = '<option value="">— Válassz csapatot —</option>';
+  aE.innerHTML = '<option value="">— Válassz csapatot —</option>';
+  T.forEach(function(t){
+    hE.innerHTML += '<option value="' + t + '">' + t + '</option>';
+    aE.innerHTML += '<option value="' + t + '">' + t + '</option>';
+  });
+  var dH = T.find(function(t){ return t.indexOf('Arsenal') >= 0; }) || T[0];
+  var dA = T.find(function(t){ return t.indexOf('Chelsea') >= 0; }) || T[1];
+  if (dH) hE.value = dH;
+  if (dA) aE.value = dA;
+
+  setSt('ok', AM.length + ' meccs betöltve (' + loaded + '/3 szezon)');
+  document.getElementById('mci').style.display = 'flex';
+  document.getElementById('mcl').textContent = AM.length + ' mérkőzés az adatbázisban';
+  document.getElementById('pbtn').disabled = false;
+}
+
+// ── MODEL ────────────────────────────────────────────────────────────────────
+function pDate(d) {
+  if (!d) return 0;
+  var p = d.split('/');
+  if (p.length === 3) {
+    var y = p[2].length === 2 ? (parseInt(p[2]) > 50 ? 1900 : 2000) + parseInt(p[2]) : parseInt(p[2]);
+    return new Date(y, parseInt(p[1])-1, parseInt(p[0])).getTime();
+  }
+  return new Date(d).getTime() || 0;
+}
+
+function getMs(team, role, w) {
+  var ms = AM.filter(function(m){ return role === 'home' ? m.HomeTeam === team : m.AwayTeam === team; });
+  ms.sort(function(a,b){ return pDate(b.Date) - pDate(a.Date); });
+  return w === 'all' ? ms : ms.slice(0, parseInt(w));
+}
+
+function wavg(vals, mode) {
+  if (!vals.length) return 0;
+  if (mode === 'none') return vals.reduce(function(a,b){ return a+b; }, 0) / vals.length;
+  var ws = 0, vs = 0;
+  vals.forEach(function(v,i){
+    var w = mode === 'exp' ? Math.pow(2, vals.length-1-i) : (vals.length-i);
+    vs += v*w; ws += w;
+  });
+  return vs/ws;
+}
+
+function calc(ht, at, win, tr) {
+  var hH = getMs(ht,'home',win), aA = getMs(at,'away',win);
+  if (!hH.length) throw new Error('Nincs hazai meccsadat: ' + ht);
+  if (!aA.length) throw new Error('Nincs vendég meccsadat: ' + at);
+  var hFor=wavg(hH.map(function(m){return m.HC;}),tr);
+  var hAg =wavg(hH.map(function(m){return m.AC;}),tr);
+  var aFor=wavg(aA.map(function(m){return m.AC;}),tr);
+  var aAg =wavg(aA.map(function(m){return m.HC;}),tr);
+  var lgH=AM.reduce(function(s,m){return s+m.HC;},0)/AM.length;
+  var lgA=AM.reduce(function(s,m){return s+m.AC;},0)/AM.length;
+  var hAtk=hFor/lgH, aAtk=aFor/lgA, hDef=hAg/lgA, aDef=aAg/lgH;
+  var pH=parseFloat((lgH*hAtk*aDef).toFixed(2));
+  var pA=parseFloat((lgA*aAtk*hDef).toFixed(2));
+  return { pH:pH, pA:pA, pT:parseFloat((pH+pA).toFixed(2)),
+    hFor:parseFloat(hFor.toFixed(2)), hAg:parseFloat(hAg.toFixed(2)),
+    aFor:parseFloat(aFor.toFixed(2)), aAg:parseFloat(aAg.toFixed(2)),
+    lgAvg:parseFloat((lgH+lgA).toFixed(2)),
+    hAtk:parseFloat(hAtk.toFixed(3)), aAtk:parseFloat(aAtk.toFixed(3)),
+    hDef:parseFloat(hDef.toFixed(3)), aDef:parseFloat(aDef.toFixed(3)),
+    conf:Math.min(95,40+Math.min(hH.length,aA.length)*5),
+    tm:AM.length, hR:hH.slice(0,6), aR:aA.slice(0,6) };
+}
+
+function runP() {
+  var ht=document.getElementById('ht').value;
+  var at=document.getElementById('at').value;
+  var win=document.getElementById('mw').value;
+  var tr=document.getElementById('tw').value;
+  var ep=document.getElementById('ep');
+  ep.style.display='none';
+  if (!ht||!at){ep.textContent='Kérlek válassz ki mindkét csapatot!';ep.style.display='block';return;}
+  if (ht===at){ep.textContent='A két csapat nem lehet ugyanaz!';ep.style.display='block';return;}
+  document.getElementById('lding').style.display='block';
+  document.getElementById('rp').style.display='none';
+  setTimeout(function(){
+    try { var r=calc(ht,at,win,tr); disp(r,ht,at); }
+    catch(e) { ep.textContent='Hiba: '+e.message; ep.style.display='block'; }
+    document.getElementById('lding').style.display='none';
+  }, 200);
+}
+
+function disp(r, ht, at) {
+  document.getElementById('rp').style.display='block';
+  document.getElementById('mtt').textContent=ht+' vs '+at;
+  document.getElementById('rhn').textContent=ht;
+  document.getElementById('ran').textContent=at;
+  document.getElementById('rhc').textContent=r.pH.toFixed(1);
+  document.getElementById('rac').textContent=r.pA.toFixed(1);
+  document.getElementById('rtot').textContent=r.pT.toFixed(1);
+  document.getElementById('shf').textContent=r.hFor.toFixed(1);
+  document.getElementById('saf').textContent=r.aFor.toFixed(1);
+  document.getElementById('slg').textContent=r.lgAvg.toFixed(1);
+  document.getElementById('sha').textContent=r.hAg.toFixed(1);
+  document.getElementById('saa').textContent=r.aAg.toFixed(1);
+  document.getElementById('stm').textContent=r.tm;
+  var T=r.pT;
+  var ranges=[
+    {l:'Hazai szögletek',v:r.pH,m:12,c:'rfh',p:false},
+    {l:'Vendég szögletek',v:r.pA,m:12,c:'rfa',p:false},
+    {l:'Össz szögletek',v:T,m:22,c:'rfb',p:false},
+    {l:'Alatt 8.5',v:T<8.5?68:32,m:100,c:'rfa',p:true},
+    {l:'Felett 8.5',v:T>=8.5?68:32,m:100,c:'rfh',p:true},
+    {l:'Felett 10.5',v:T>=10.5?62:22,m:100,c:'rfb',p:true}
+  ];
+  document.getElementById('rb').innerHTML=ranges.map(function(rb){
+    var w=Math.min(100,rb.v/rb.m*100).toFixed(1);
+    return '<div class="rrow"><div class="rl">'+rb.l+'</div><div class="rt"><div class="rf '+rb.c+'" style="width:'+w+'%"></div></div><div class="rv">'+(rb.p?rb.v+'%':rb.v.toFixed(1))+'</div></div>';
+  }).join('');
+  function ff(ms,isH){
+    if(!ms.length) return '<div style="color:var(--dim);font-size:.72rem;padding:6px 0">Nincs adat</div>';
+    return ms.map(function(m){
+      return '<div class="frow"><div class="fd">'+(m.Date||'?')+'</div><div class="fo">'+(isH?m.AwayTeam:m.HomeTeam)+'</div><div class="cb cbh">'+m.HC+'</div><div class="cb cba">'+m.AC+'</div></div>';
+    }).join('');
+  }
+  document.getElementById('fg').innerHTML=
+    '<div><div class="ftt">'+ht+' (hazai)</div>'+ff(r.hR,true)+'</div>'+
+    '<div><div class="ftt">'+at+' (vendég)</div>'+ff(r.aR,false)+'</div>';
+  document.getElementById('mfml').textContent=
+    'H: '+r.lgAvg.toFixed(1)+'/2 x atk('+r.hAtk+') x def('+r.aDef+') | A: '+r.lgAvg.toFixed(1)+'/2 x atk('+r.aAtk+') x def('+r.hDef+')';
+  document.getElementById('cpct').textContent=r.conf+'%';
+  setTimeout(function(){document.getElementById('cfil').style.width=r.conf+'%';},100);
+  document.getElementById('rp').scrollIntoView({behavior:'smooth',block:'start'});
+}
+
+loadAll();
+</script>
+</body>
+</html>
