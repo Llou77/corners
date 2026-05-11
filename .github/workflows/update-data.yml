@@ -14,18 +14,16 @@ jobs:
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: CSV-k letöltése
         run: |
           mkdir -p data
+          echo "Letöltés: 2025/26..."
+          curl -f -o data/E0_2526.csv "https://www.football-data.co.uk/mmz4281/2526/E0.csv"
           echo "Letöltés: 2024/25..."
           curl -f -o data/E0_2425.csv "https://www.football-data.co.uk/mmz4281/2425/E0.csv"
           echo "Letöltés: 2023/24..."
           curl -f -o data/E0_2324.csv "https://www.football-data.co.uk/mmz4281/2324/E0.csv"
-          echo "Letöltés: 2022/23..."
-          curl -f -o data/E0_2223.csv "https://www.football-data.co.uk/mmz4281/2223/E0.csv"
           echo "--- Eredmény ---"
           wc -l data/*.csv
 
