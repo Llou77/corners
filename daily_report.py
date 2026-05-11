@@ -1,22 +1,25 @@
 #!/usr/bin/env python3
 """
-Corner Prophet - Napi Report Generator v0.5
-Futtatja a szoglet modellt az aznapi PL meccsekre
-football-data.org API alapjan
+Corner Prophet - Napi Becslés v0.5
+Fut: minden nap 08:00 UTC (10:00 Budapest)
+1. Lekéri az aznapi PL meccseket
+2. Lefuttatja a modellt
+3. Elmenti predictions/history.json-ba
+4. Elküldi Telegramra
 """
 
-import json
-import urllib.request
-import urllib.error
-import sys
-import os
+import json, urllib.request, os, sys, math
 from datetime import datetime, timezone
 
-FDORG_TOKEN = os.environ.get("FDORG_TOKEN", "")
-TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN", "")
+FDORG_TOKEN   = os.environ.get("FDORG_TOKEN", "")
+TELEGRAM_TOKEN   = os.environ.get("TELEGRAM_TOKEN", "")
 TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID", "")
 
 DATA_DIR = "data"
+PRED_DIR = "predictions"
+HIST_FILE = f"{PRED_DIR}/history.json"
+SUM_FILE  = f"{PRED_DIR}/summary.json"
+
 CSV_FILES = {
     "2024/25": f"{DATA_DIR}/E0_2425.csv",
     "2023/24": f"{DATA_DIR}/E0_2324.csv",
@@ -24,245 +27,264 @@ CSV_FILES = {
 }
 SEASON_W = {"2024/25": 0.6, "2023/24": 0.3, "2022/23": 0.1}
 
+# ── HELPERS ───────────────────────────────────────────────────────────────────
+
+def load_json(path, default):
+    try:
+        with open(path, encoding="utf-8") as f:
+            return json.load(f)
+    except:
+        return default
+
+def save_json(path, data):
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
+
+def api_get(url):
+    req = urllib.request.Request(url, headers={"X-Auth-Token": FDORG_TOKEN})
+    with urllib.request.urlopen(req, timeout=10) as r:
+        return json.loads(r.read())
+
 # ── CSV BETÖLTÉS ──────────────────────────────────────────────────────────────
 
 def load_matches():
     all_matches = []
     for season, path in CSV_FILES.items():
         if not os.path.exists(path):
-            print(f"WARN: {path} not found, skipping")
             continue
         with open(path, encoding="utf-8-sig") as f:
             lines = f.read().strip().split("\n")
         if len(lines) < 2:
             continue
         hdrs = [h.strip() for h in lines[0].split(",")]
-        hi = hdrs.index("HomeTeam")
-        ai = hdrs.index("AwayTeam")
-        hci = hdrs.index("HC")
-        aci = hdrs.index("AC")
+        hi, ai = hdrs.index("HomeTeam"), hdrs.index("AwayTeam")
+        hci, aci = hdrs.index("HC"), hdrs.index("AC")
         di = hdrs.index("Date") if "Date" in hdrs else -1
         for line in lines[1:]:
             v = line.split(",")
             if len(v) <= max(hi, ai, hci, aci):
                 continue
             try:
-                hc = float(v[hci])
-                ac = float(v[aci])
+                hc, ac = float(v[hci]), float(v[aci])
             except ValueError:
                 continue
             all_matches.append({
-                "home": v[hi].strip(),
-                "away": v[ai].strip(),
-                "HC": hc,
-                "AC": ac,
+                "home": v[hi].strip(), "away": v[ai].strip(),
+                "HC": hc, "AC": ac,
                 "date": v[di].strip() if di >= 0 else "",
                 "_s": season,
             })
     return all_matches
 
-# ── FOOTBALL-DATA.ORG API ─────────────────────────────────────────────────────
-
-def get_today_fixtures():
-    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-    url = f"https://api.football-data.org/v4/competitions/PL/matches?dateFrom={today}&dateTo={today}&status=SCHEDULED"
-    req = urllib.request.Request(url, headers={"X-Auth-Token": FDORG_TOKEN})
-    try:
-        with urllib.request.urlopen(req, timeout=10) as resp:
-            data = json.loads(resp.read())
-        return data.get("matches", [])
-    except Exception as e:
-        print(f"API hiba: {e}")
-        return []
-
-# ── MODELL (v0.3 logika) ──────────────────────────────────────────────────────
-
-def parse_date(d):
-    if not d:
-        return 0
-    parts = d.split("/")
-    if len(parts) == 3:
-        dd, mm, yy = parts
-        y = (1900 if int(yy) > 50 else 2000) + int(yy) if len(yy) == 2 else int(yy)
-        return datetime(y, int(mm), int(dd)).timestamp()
-    try:
-        return datetime.fromisoformat(d).timestamp()
-    except:
-        return 0
+# ── MODELL ────────────────────────────────────────────────────────────────────
 
 def sw(m):
     return SEASON_W.get(m["_s"], 0.1)
 
-def get_ms(matches, team, role, w):
-    ms = [m for m in matches if (m["home"] if role == "home" else m["away"]) == team]
-    ms.sort(key=lambda m: parse_date(m["date"]), reverse=True)
-    return ms[:w] if w != "all" else ms
+def parse_date(d):
+    if not d: return 0
+    p = d.split("/")
+    if len(p) == 3:
+        y = (1900 if int(p[2]) > 50 else 2000) + int(p[2]) if len(p[2]) == 2 else int(p[2])
+        return datetime(y, int(p[1]), int(p[0])).timestamp()
+    try: return datetime.fromisoformat(d).timestamp()
+    except: return 0
 
-def wavg_combined(matches, val_fn):
-    if not matches:
-        return 0
+def get_ms(matches, team, role, w=7):
+    ms = [m for m in matches if (m["home"] if role=="home" else m["away"]) == team]
+    ms.sort(key=lambda m: parse_date(m["date"]), reverse=True)
+    return ms[:w]
+
+def wavg(matches, val_fn):
+    if not matches: return 0
     total = ws = 0
     for i, m in enumerate(matches):
         w = sw(m) * (len(matches) - i)
-        total += val_fn(m) * w
-        ws += w
+        total += val_fn(m) * w; ws += w
     return total / ws if ws else 0
 
-def tactic_def_idx(matches, team, role):
-    curr = [m for m in matches if m["_s"] == "2024/25" and
-            (m["home"] if role == "home" else m["away"]) == team]
-    if not curr:
-        curr = [m for m in matches if (m["home"] if role == "home" else m["away"]) == team]
-    if not curr:
-        return 1.0
-    conceded = [m["AC"] if role == "home" else m["HC"] for m in curr]
+def tact_def(matches, team, role):
+    curr = [m for m in matches if m["_s"]=="2024/25" and (m["home"] if role=="home" else m["away"])==team]
+    if not curr: curr = [m for m in matches if (m["home"] if role=="home" else m["away"])==team]
+    if not curr: return 1.0
+    conceded = [m["AC"] if role=="home" else m["HC"] for m in curr]
     team_avg = sum(conceded) / len(conceded)
-    lg_ms = [m for m in matches if m["_s"] == "2024/25"] or matches
-    lg_vals = [m["AC"] if role == "home" else m["HC"] for m in lg_ms]
+    lg = [m for m in matches if m["_s"]=="2024/25"] or matches
+    lg_vals = [m["AC"] if role=="home" else m["HC"] for m in lg]
     lg_avg = sum(lg_vals) / len(lg_vals) if lg_vals else 1
     return team_avg / lg_avg if lg_avg else 1.0
 
 def lg_avgs(matches):
     wH = wA = wS = 0
     for m in matches:
-        w = sw(m)
-        wH += m["HC"] * w
-        wA += m["AC"] * w
-        wS += w
+        w = sw(m); wH += m["HC"]*w; wA += m["AC"]*w; wS += w
     return (wH/wS if wS else 5), (wA/wS if wS else 5)
 
-def poisson_prob(lam, k):
-    import math
-    if lam <= 0:
-        return 1.0 if k == 0 else 0.0
-    return math.exp(-lam + k * math.log(lam) - sum(math.log(i) for i in range(1, k+1)))
+def poisson_p(lam, k):
+    if lam <= 0: return 1.0 if k==0 else 0.0
+    return math.exp(-lam + k*math.log(lam) - sum(math.log(i) for i in range(1,k+1)))
 
-def poisson_over(lH, lA, threshold):
-    prob = 0
+def poisson_over(lH, lA, t):
+    p = 0
     for h in range(36):
         for a in range(36):
-            if h + a > threshold:
-                prob += poisson_prob(lH, h) * poisson_prob(lA, a)
-    return min(prob, 1)
+            if h+a > t: p += poisson_p(lH,h) * poisson_p(lA,a)
+    return min(p, 1)
 
-def predict(matches, home_team, away_team, win=7):
-    hH = get_ms(matches, home_team, "home", win)
-    aA = get_ms(matches, away_team, "away", win)
-    if not hH or not aA:
-        return None
+def predict(matches, home, away):
+    hH = get_ms(matches, home, "home")
+    aA = get_ms(matches, away, "away")
+    if not hH or not aA: return None
     lgH, lgA = lg_avgs(matches)
-    hFor = wavg_combined(hH, lambda m: m["HC"])
-    aFor = wavg_combined(aA, lambda m: m["AC"])
-    hAtk = hFor / lgH if lgH else 1
-    aAtk = aFor / lgA if lgA else 1
-    hDefIdx = tactic_def_idx(matches, home_team, "home")
-    aDefIdx = tactic_def_idx(matches, away_team, "away")
-    pH = round(lgH * hAtk * aDefIdx, 2)
-    pA = round(lgA * aAtk * hDefIdx, 2)
+    hAtk = wavg(hH, lambda m: m["HC"]) / lgH if lgH else 1
+    aAtk = wavg(aA, lambda m: m["AC"]) / lgA if lgA else 1
+    hDef = tact_def(matches, home, "home")
+    aDef = tact_def(matches, away, "away")
+    pH = round(lgH * hAtk * aDef, 2)
+    pA = round(lgA * aAtk * hDef, 2)
     pT = round(pH + pA, 2)
     thresholds = [6.5, 7.5, 8.5, 9.5, 10.5, 11.5, 12.5]
-    probs = {t: round(poisson_over(pH, pA, t) * 100, 1) for t in thresholds}
-    return {"pH": pH, "pA": pA, "pT": pT, "probs": probs,
-            "hAtk": round(hAtk, 3), "aAtk": round(aAtk, 3),
-            "hDef": round(hDefIdx, 3), "aDef": round(aDefIdx, 3),
-            "lgAvg": round(lgH + lgA, 1)}
+    probs = {str(t): round(poisson_over(pH, pA, t)*100, 1) for t in thresholds}
+    return {"pH": pH, "pA": pA, "pT": pT, "probs": probs}
 
-# ── REPORT FORMÁZÁS ───────────────────────────────────────────────────────────
+# ── NAME MAPPING ──────────────────────────────────────────────────────────────
+
+NAME_MAP = {
+    "Arsenal": "Arsenal", "Chelsea": "Chelsea", "Liverpool": "Liverpool",
+    "Man United": "Man United", "Man City": "Man City", "Tottenham": "Tottenham",
+    "Newcastle": "Newcastle", "Aston Villa": "Aston Villa", "Brighton": "Brighton",
+    "West Ham": "West Ham", "Brentford": "Brentford", "Fulham": "Fulham",
+    "Crystal Palace": "Crystal Palace", "Everton": "Everton", "Wolves": "Wolves",
+    "Bournemouth": "Bournemouth", "Nott'm Forest": "Nott'm Forest",
+    "Leicester": "Leicester", "Ipswich": "Ipswich", "Southampton": "Southampton",
+    "Leeds": "Leeds", "Burnley": "Burnley", "Luton": "Luton",
+    "Sheffield Utd": "Sheffield United", "Sheffield United": "Sheffield United",
+}
+
+# ── FOOTBALL-DATA.ORG ─────────────────────────────────────────────────────────
+
+def get_fixtures(date_from, date_to, status="SCHEDULED"):
+    url = f"https://api.football-data.org/v4/competitions/PL/matches?dateFrom={date_from}&dateTo={date_to}&status={status}"
+    try:
+        return api_get(url).get("matches", [])
+    except Exception as e:
+        print(f"API hiba: {e}"); return []
+
+# ── SUMMARY FRISSÍTÉS ─────────────────────────────────────────────────────────
+
+def update_summary():
+    hist = load_json(HIST_FILE, [])
+    done = [e for e in hist if e.get("actualT") is not None]
+    if not done:
+        save_json(SUM_FILE, {"evaluated": 0, "mae": None, "bias": None, "acc": {}})
+        return
+    n = len(done)
+    errors = [e["predT"] - e["actualT"] for e in done]
+    mae = round(sum(abs(x) for x in errors) / n, 3)
+    bias = round(sum(errors) / n, 3)
+    acc = {}
+    for t in ["6.5","7.5","8.5","9.5","10.5","11.5","12.5"]:
+        relevant = [e for e in done if e.get("probs") and t in e["probs"]]
+        if not relevant: continue
+        correct = sum(1 for e in relevant if
+            (e["probs"][t] >= 50 and e["actualT"] > float(t)) or
+            (e["probs"][t] < 50 and e["actualT"] <= float(t)))
+        acc[t] = round(correct / len(relevant) * 100, 1)
+    summary = {"evaluated": n, "mae": mae, "bias": bias, "acc": acc,
+               "updatedAt": datetime.now(timezone.utc).isoformat()}
+    save_json(SUM_FILE, summary)
+    print(f"Summary: n={n}, MAE={mae}, bias={bias}")
+
+# ── TELEGRAM ──────────────────────────────────────────────────────────────────
+
+def send_telegram(text):
+    if not TELEGRAM_TOKEN or not TELEGRAM_CHAT_ID:
+        print("WARN: Telegram credentials missing"); return
+    url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
+    payload = json.dumps({"chat_id": TELEGRAM_CHAT_ID, "text": text, "parse_mode": "Markdown"}).encode()
+    req = urllib.request.Request(url, data=payload, headers={"Content-Type": "application/json"})
+    with urllib.request.urlopen(req, timeout=10) as r:
+        print(f"Telegram: {r.status}")
 
 def format_telegram(fixtures, predictions, today):
     lines = [
-        f"⚽ *Corners Prediction — Napi jelentés*",
+        "⚽ *Corners Prediction — Napi jelentés*",
         f"📅 {today} | Premier League",
         "━━━━━━━━━━━━━━━━━━━━━",
     ]
     if not fixtures:
         lines.append("\nMa nincs Premier League mérkőzés.")
+        lines.append("\n_Daily Corners v0.5 • Csak tájékoztató célra_")
         return "\n".join(lines)
-
     for fix in fixtures:
-        home = fix["homeTeam"]["shortName"]
-        away = fix["awayTeam"]["shortName"]
-        time = fix["utcDate"][11:16]
-        pred = predictions.get(f"{home}|{away}")
-        lines.append(f"\n🕐 {time} UTC | *{home} vs {away}*")
+        home_raw = fix["homeTeam"]["shortName"]
+        away_raw = fix["awayTeam"]["shortName"]
+        time_str = fix["utcDate"][11:16]
+        pred = predictions.get(f"{home_raw}|{away_raw}")
+        lines.append(f"\n🕐 {time_str} UTC | *{home_raw} vs {away_raw}*")
         if pred:
             lines.append(f"📐 Várható szögletek: {pred['pH']} + {pred['pA']} = *{pred['pT']}*")
-            lines.append(f"📊 Liga átlag: {pred['lgAvg']}")
             lines.append("📈 Poisson valószínűségek:")
             for t, p in pred["probs"].items():
                 under = round(100 - p, 1)
-                bar = "🟢" if p >= 60 else "🟡" if p >= 40 else "🔴"
-                lines.append(f"  {bar} Felett {t}: *{p}%* / Alatt: {under}%")
+                icon = "🟢" if p >= 60 else "🟡" if p >= 40 else "🔴"
+                lines.append(f"  {icon} Felett {t}: *{p}%* / Alatt: {under}%")
         else:
-            lines.append("  ⚠️ Nincs elegendő adat az előrejelzéshez")
+            lines.append("  ⚠️ Nincs elegendő adat")
         lines.append("─────────────────────")
-
-    lines.append("\n_Daily Corners v0.3 • Csak tájékoztató célra_")
+    lines.append("\n_Daily Corners v0.5 • Csak tájékoztató célra_")
     return "\n".join(lines)
-
-# ── KÜLDÉS ────────────────────────────────────────────────────────────────────
-
-def send_telegram(text):
-    if not TELEGRAM_TOKEN or not TELEGRAM_CHAT_ID:
-        print("WARN: Telegram credentials missing, skipping")
-        return
-    url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
-    payload = json.dumps({
-        "chat_id": TELEGRAM_CHAT_ID,
-        "text": text,
-        "parse_mode": "Markdown"
-    }).encode()
-    req = urllib.request.Request(url, data=payload,
-                                  headers={"Content-Type": "application/json"})
-    with urllib.request.urlopen(req, timeout=10) as resp:
-        print(f"Telegram: {resp.status}")
 
 # ── MAIN ──────────────────────────────────────────────────────────────────────
 
 def main():
     today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-    print(f"Corner Prophet Napi Report — {today}")
+    print(f"Corner Prophet Napi Becslés — {today}")
 
-    # Betöltés
     matches = load_matches()
     print(f"Betöltött meccsek: {len(matches)}")
 
-    # Aznapi fixtures
-    fixtures = get_today_fixtures()
+    fixtures = get_fixtures(today, today)
     print(f"Mai PL meccsek: {len(fixtures)}")
 
-    # Előrejelzések
     predictions = {}
-    # Csapatnév mapping: football-data.org shortName -> CSV név
-    name_map = {
-        "Arsenal": "Arsenal", "Chelsea": "Chelsea", "Liverpool": "Liverpool",
-        "Man United": "Man United", "Man City": "Man City", "Tottenham": "Tottenham",
-        "Newcastle": "Newcastle", "Aston Villa": "Aston Villa", "Brighton": "Brighton",
-        "West Ham": "West Ham", "Brentford": "Brentford", "Fulham": "Fulham",
-        "Crystal Palace": "Crystal Palace", "Everton": "Everton", "Wolves": "Wolves",
-        "Bournemouth": "Bournemouth", "Nott'm Forest": "Nott'm Forest",
-        "Leicester": "Leicester", "Ipswich": "Ipswich", "Southampton": "Southampton",
-        "Leeds": "Leeds", "Burnley": "Burnley", "Luton": "Luton",
-        "Sheffield United": "Sheffield United",
-    }
+    hist = load_json(HIST_FILE, [])
+    existing_ids = {e["id"] for e in hist}
 
     for fix in fixtures:
         home_raw = fix["homeTeam"]["shortName"]
         away_raw = fix["awayTeam"]["shortName"]
-        home = name_map.get(home_raw, home_raw)
-        away = name_map.get(away_raw, away_raw)
+        home = NAME_MAP.get(home_raw, home_raw)
+        away = NAME_MAP.get(away_raw, away_raw)
+        entry_id = f"{today}_{home_raw.replace(' ','')}_{away_raw.replace(' ','')}"
+
         pred = predict(matches, home, away)
         if pred:
             predictions[f"{home_raw}|{away_raw}"] = pred
-            print(f"  {home} vs {away}: {pred['pT']} szöglet")
+            print(f"  {home} vs {away}: {pred['pT']}")
+            # Csak akkor mentjük ha még nem szerepel
+            if entry_id not in existing_ids:
+                hist.insert(0, {
+                    "id": entry_id,
+                    "date": today,
+                    "savedAt": datetime.now(timezone.utc).isoformat(),
+                    "home": home_raw, "away": away_raw,
+                    "homeCSV": home, "awayCSV": away,
+                    "predH": pred["pH"], "predA": pred["pA"], "predT": pred["pT"],
+                    "probs": pred["probs"],
+                    "actualH": None, "actualA": None, "actualT": None,
+                    "error": None,
+                    "matchId": fix.get("id")
+                })
         else:
             print(f"  {home} vs {away}: nincs adat")
 
-    # Formázás
-    tg_text = format_telegram(fixtures, predictions, today)
+    save_json(HIST_FILE, hist)
+    update_summary()
 
-    # Küldés
-    send_telegram(tg_text)
+    tg = format_telegram(fixtures, predictions, today)
+    send_telegram(tg)
     print("Kész!")
 
 if __name__ == "__main__":
