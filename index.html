@@ -88,6 +88,29 @@ header{padding:32px 0 24px;border-bottom:1px solid var(--brd);margin-bottom:32px
 #ep{display:none;background:rgba(255,107,53,.08);border:1px solid rgba(255,107,53,.3);padding:16px 22px;font-size:.78rem;color:var(--acc2);margin-bottom:14px}
 @media(max-width:620px){.tsel{grid-template-columns:1fr}.vs{padding-top:0}.pm{grid-template-columns:1fr;text-align:center}.sgrid{grid-template-columns:1fr 1fr}.fgrid{grid-template-columns:1fr}}
 footer{margin-top:40px;padding-top:20px;border-top:1px solid var(--brd);font-size:.62rem;color:var(--dim);display:flex;justify-content:space-between;flex-wrap:wrap;gap:6px}
+.savebtn{width:100%;background:var(--surf2);color:var(--acc3);border:1px solid var(--acc3);font-family:'Barlow Condensed',sans-serif;font-size:1rem;font-weight:700;letter-spacing:.12em;text-transform:uppercase;padding:12px;cursor:pointer;transition:all .2s;margin-top:1px}
+.savebtn:hover{background:var(--acc3);color:var(--bg)}
+.savebtn:disabled{opacity:.35;cursor:not-allowed}
+.histpanel{background:var(--surf);border:1px solid var(--brd);padding:24px;margin-top:32px}
+.histpanel h2{font-family:'Barlow Condensed',sans-serif;font-size:1rem;font-weight:600;letter-spacing:.15em;text-transform:uppercase;color:var(--mid);margin-bottom:20px}
+.sumgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:1px;background:var(--brd);margin-bottom:20px}
+.sumcell{background:var(--surf2);padding:16px;text-align:center}
+.sumlbl{font-size:.58rem;letter-spacing:.15em;text-transform:uppercase;color:var(--dim);margin-bottom:6px}
+.sumval{font-family:'Barlow Condensed',sans-serif;font-size:1.4rem;font-weight:700;color:var(--txt)}
+.sumval.good{color:var(--acc3)}.sumval.warn{color:var(--acc)}.sumval.bad{color:var(--acc2)}
+.htable{width:100%;border-collapse:collapse;font-size:.7rem}
+.htable th{text-align:left;color:var(--dim);letter-spacing:.1em;text-transform:uppercase;font-size:.58rem;padding:6px 8px;border-bottom:1px solid var(--brd)}
+.htable td{padding:7px 8px;border-bottom:1px solid var(--brd);color:var(--mid)}
+.htable tr:hover td{background:var(--surf2)}
+.hbadge{display:inline-block;padding:2px 7px;font-family:'Barlow Condensed',sans-serif;font-size:.8rem;font-weight:700}
+.hbadge.pending{color:var(--acc);border:1px solid var(--acc)}
+.hbadge.good{color:var(--acc3);border:1px solid var(--acc3)}
+.hbadge.ok{color:var(--acc);border:1px solid var(--acc)}
+.hbadge.bad{color:var(--acc2);border:1px solid var(--acc2)}
+.actual-input{background:var(--bg);border:1px solid var(--brd);color:var(--txt);font-family:'IBM Plex Mono',monospace;font-size:.75rem;padding:3px 7px;width:55px;outline:none}
+.actual-input:focus{border-color:var(--acc)}
+.clrbtn{background:none;border:none;color:var(--dim);font-size:.7rem;cursor:pointer;padding:4px 8px;letter-spacing:.05em}
+.clrbtn:hover{color:var(--acc2)}
 </style>
 </head>
 <body>
@@ -97,7 +120,7 @@ footer{margin-top:40px;padding-top:20px;border-top:1px solid var(--brd);font-siz
     <div class="logo-ico">&#x26BD;</div>
     <div class="logo-text">
       <h1>Corner Prophet</h1>
-      <p>Premier League &bull; Sz&ouml;glet El&#337;rejelz&#337; &bull; v0.3</p>
+      <p>Premier League &bull; Sz&ouml;glet El&#337;rejelz&#337; &bull; v0.4</p>
     </div>
   </div>
   <div class="badge"><div class="dot"></div><span>2022&ndash;25 szezon</span></div>
@@ -142,10 +165,32 @@ footer{margin-top:40px;padding-top:20px;border-top:1px solid var(--brd);font-siz
   <div class="rp2"><h4>Val&oacute;sz&iacute;n&#369;s&eacute;gi tartom&aacute;nyok</h4><div id="rb"></div></div>
   <div class="fp"><h4>Legut&oacute;bbi meccsek &mdash; k&eacute;k = hazai sz&ouml;gletek &bull; narancs = vend&eacute;g sz&ouml;gletek</h4><div class="fgrid" id="fg"></div></div>
   <div class="mp">
-    <div class="mt2">Model v0.3 &bull; Taktikai index + Hazai/vendég forma + Szezon-pozíció súlyozás</div>
+    <div class="mt2">Model v0.4 &bull; Taktikai index + Hazai/vendég forma + Szezon-pozíció súlyozás</div>
     <div class="mfml" id="mfml">&#8212;</div>
     <div class="cbar"><div class="clbl">Adatbiztons&aacute;g</div><div class="ctrk"><div class="cfil" id="cfil" style="width:0%"></div></div><div class="cpct" id="cpct">&#8212;</div></div>
   </div>
+</div>
+  <button class="savebtn" id="savebtn" onclick="savePred()" disabled>&#8659; El&#337;rejelz&eacute;s ment&eacute;se az el&#337;zm&eacute;nyekbe</button>
+</div>
+
+<div class="histpanel" id="histpanel" style="display:none">
+  <h2>&#128202; El&#337;rejelz&eacute;s el&#337;zm&eacute;nyek</h2>
+  <div class="sumgrid" id="sumgrid"></div>
+  <table class="htable">
+    <thead>
+      <tr>
+        <th>D&aacute;tum</th>
+        <th>Meccs</th>
+        <th>Becs&uuml;lt</th>
+        <th>Val&oacute;di</th>
+        <th>Hiba</th>
+        <th>Val&oacute;di adat</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody id="htbody"></tbody>
+  </table>
+  <button class="clrbtn" onclick="clearHistory()">&#215; El&#337;zm&eacute;nyek t&ouml;rl&eacute;se</button>
 </div>
 
 <footer>
@@ -504,8 +549,148 @@ function disp(r, ht, at) {
   document.getElementById('cpct').textContent = r.conf + '%';
   setTimeout(function(){ document.getElementById('cfil').style.width = r.conf+'%'; }, 100);
   document.getElementById('rp').scrollIntoView({behavior:'smooth', block:'start'});
+  // Store result for saving
+  lastResult = r;
+  lastResult.poisProbs = r.poisProbs;
+  document.getElementById('savebtn').disabled = false;
+  document.getElementById('savebtn').textContent = '↓ Előrejelzés mentése az előzményekbe';
+}
+
+// ── HISTORY (v0.4) ───────────────────────────────────────────────────────────
+
+var HIST_KEY = 'cp_history_v1';
+var lastResult = null;
+
+function loadHistory() {
+  try {
+    return JSON.parse(localStorage.getItem(HIST_KEY) || '[]');
+  } catch(e) { return []; }
+}
+
+function saveHistory(hist) {
+  localStorage.setItem(HIST_KEY, JSON.stringify(hist));
+}
+
+function savePred() {
+  if (!lastResult) return;
+  var r = lastResult;
+  var ht = document.getElementById('ht').value;
+  var at = document.getElementById('at').value;
+  var id = new Date().toISOString().slice(0,10) + '_' + ht.replace(/\s/g,'') + '_' + at.replace(/\s/g,'');
+  var entry = {
+    id: id,
+    date: new Date().toISOString().slice(0,10),
+    savedAt: new Date().toISOString(),
+    home: ht, away: at,
+    predH: r.pH, predA: r.pA, predT: r.pT,
+    poisson: r.poisProbs,
+    actualH: null, actualA: null, actualT: null,
+    error: null
+  };
+  var hist = loadHistory();
+  // Avoid duplicate for same matchup on same day
+  hist = hist.filter(function(e){ return e.id !== id; });
+  hist.unshift(entry);
+  saveHistory(hist);
+  renderHistory();
+  document.getElementById('savebtn').textContent = '✓ Mentve!';
+  setTimeout(function(){ document.getElementById('savebtn').textContent = '↓ Előrejelzés mentése az előzményekbe'; }, 2000);
+}
+
+function setActual(id, val) {
+  var hist = loadHistory();
+  hist = hist.map(function(e) {
+    if (e.id !== id) return e;
+    var t = parseFloat(val);
+    if (isNaN(t)) { e.actualT = null; e.error = null; return e; }
+    e.actualT = t;
+    e.error = parseFloat((e.predT - t).toFixed(2));
+    return e;
+  });
+  saveHistory(hist);
+  renderHistory();
+}
+
+function clearHistory() {
+  if (!confirm('Biztosan törlöd az összes előzményt?')) return;
+  localStorage.removeItem(HIST_KEY);
+  renderHistory();
+}
+
+function calcSummary(hist) {
+  var withActual = hist.filter(function(e){ return e.actualT !== null; });
+  if (!withActual.length) return null;
+  var mae = withActual.reduce(function(s,e){ return s + Math.abs(e.error); }, 0) / withActual.length;
+  var bias = withActual.reduce(function(s,e){ return s + e.error; }, 0) / withActual.length;
+  // Over/under accuracy for 9.5
+  var over95 = withActual.filter(function(e){ return e.poisson && e.poisson[9.5] >= 50; });
+  var over95correct = over95.filter(function(e){ return e.actualT > 9.5; }).length;
+  var under95 = withActual.filter(function(e){ return e.poisson && e.poisson[9.5] < 50; });
+  var under95correct = under95.filter(function(e){ return e.actualT <= 9.5; }).length;
+  var total95 = over95.length + under95.length;
+  var correct95 = over95correct + under95correct;
+  return {
+    n: withActual.length,
+    mae: mae.toFixed(2),
+    bias: bias.toFixed(2),
+    acc95: total95 ? Math.round(correct95/total95*100) : null,
+    total95: total95
+  };
+}
+
+function renderHistory() {
+  var hist = loadHistory();
+  var panel = document.getElementById('histpanel');
+  if (!hist.length) { panel.style.display = 'none'; return; }
+  panel.style.display = 'block';
+
+  // Summary
+  var sum = calcSummary(hist);
+  var sumgrid = document.getElementById('sumgrid');
+  if (sum) {
+    var biasColor = Math.abs(parseFloat(sum.bias)) < 0.5 ? 'good' : Math.abs(parseFloat(sum.bias)) < 1.5 ? 'warn' : 'bad';
+    var maeColor = parseFloat(sum.mae) < 1.5 ? 'good' : parseFloat(sum.mae) < 2.5 ? 'warn' : 'bad';
+    var accColor = sum.acc95 >= 60 ? 'good' : sum.acc95 >= 50 ? 'warn' : 'bad';
+    sumgrid.innerHTML =
+      '<div class="sumcell"><div class="sumlbl">Értékelt meccs</div><div class="sumval">'+sum.n+'</div></div>'+
+      '<div class="sumcell"><div class="sumlbl">Átl. abszolút hiba</div><div class="sumval '+maeColor+'">'+sum.mae+'</div></div>'+
+      '<div class="sumcell"><div class="sumlbl">Torzítás (+ = túlbecslés)</div><div class="sumval '+biasColor+'">'+(parseFloat(sum.bias)>0?'+':'')+sum.bias+'</div></div>'+
+      (sum.acc95 !== null ? '<div class="sumcell"><div class="sumlbl">9.5 találati arány</div><div class="sumval '+accColor+'">'+sum.acc95+'%</div></div>' : '');
+  } else {
+    sumgrid.innerHTML = '<div class="sumcell" style="grid-column:1/-1"><div class="sumlbl" style="text-align:center;padding:8px 0">Add meg a tényleges eredményeket az összesítőhöz</div></div>';
+  }
+
+  // Table
+  var tbody = document.getElementById('htbody');
+  tbody.innerHTML = hist.map(function(e){
+    var errHtml = e.error !== null
+      ? '<span class="hbadge '+(Math.abs(e.error)<1.5?'good':Math.abs(e.error)<3?'ok':'bad')+'">'+(e.error>0?'+':'')+e.error+'</span>'
+      : '<span class="hbadge pending">-</span>';
+    var actualHtml = e.actualT !== null
+      ? '<span style="color:var(--acc3);font-weight:700">'+e.actualT+'</span>'
+      : '<span class="hbadge pending">függőben</span>';
+    return '<tr>'+
+      '<td>'+e.date+'</td>'+
+      '<td style="color:var(--txt)">'+e.home+' vs '+e.away+'</td>'+
+      '<td style="color:var(--acc);font-weight:700">'+e.predT+'</td>'+
+      '<td>'+actualHtml+'</td>'+
+      '<td>'+errHtml+'</td>'+
+      '<td><input class="actual-input" type="number" step="0.5" min="0" max="30" placeholder="pl. 11" '+
+        (e.actualT!==null?'value="'+e.actualT+'"':'')+
+        ' onchange="setActual(''+e.id+'', this.value)" /></td>'+
+      '<td><button class="clrbtn" onclick="removeEntry(''+e.id+'')">&#215;</button></td>'+
+      '</tr>';
+  }).join('');
+}
+
+function removeEntry(id) {
+  var hist = loadHistory().filter(function(e){ return e.id !== id; });
+  saveHistory(hist);
+  renderHistory();
 }
 
 loadAll();
+renderHistory();
+
 </script>
 </body>
