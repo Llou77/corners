@@ -1,0 +1,28 @@
+name: Napi Corner Prophet Report
+
+on:
+  schedule:
+    - cron: '0 8 * * *'  # 08:00 UTC = 10:00 Budapest (CEST)
+  workflow_dispatch:       # Kézi indítás is lehetséges
+
+jobs:
+  daily-report:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Python setup
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Napi report futtatása
+        env:
+          FDORG_TOKEN: ${{ secrets.FDORG_TOKEN }}
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          SMTP_USER: ${{ secrets.SMTP_USER }}
+          SMTP_PASS: ${{ secrets.SMTP_PASS }}
+          SMTP_TO: ${{ secrets.SMTP_TO }}
+        run: python3 daily_report.py
