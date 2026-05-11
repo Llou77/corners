@@ -1,0 +1,35 @@
+name: CSV adatok frissítése
+
+on:
+  schedule:
+    - cron: '0 5 * * 2,5'  # Kedd és péntek hajnali 5-kor (football-data.co.uk kedd/csütörtök frissít)
+  workflow_dispatch:        # Kézi indítás gombbal is
+
+jobs:
+  update-csv:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: CSV-k letöltése
+        run: |
+          mkdir -p data
+          echo "Letöltés: 2024/25..."
+          curl -f -o data/E0_2425.csv "https://www.football-data.co.uk/mmz4281/2425/E0.csv"
+          echo "Letöltés: 2023/24..."
+          curl -f -o data/E0_2324.csv "https://www.football-data.co.uk/mmz4281/2324/E0.csv"
+          echo "Letöltés: 2022/23..."
+          curl -f -o data/E0_2223.csv "https://www.football-data.co.uk/mmz4281/2223/E0.csv"
+          echo "--- Eredmény ---"
+          wc -l data/*.csv
+
+      - name: Commit és push (ha változott)
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add data/
+          git diff --staged --quiet && echo "Nincs változás." || (
+            git commit -m "CSV frissítés: $(date '+%Y-%m-%d')" &&
+            git push
+          )
