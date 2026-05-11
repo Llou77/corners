@@ -193,7 +193,7 @@ footer{margin-top:40px;padding-top:20px;border-top:1px solid var(--brd);font-siz
 </div>
 
 <footer>
-  <span>Adatforr&aacute;s: football-data.co.uk &bull; Szezonok: 2023/24, 2024/25, 2025/26</span>
+  <span>Adatforr&aacute;s: football-data.co.uk &bull; Szezonok: automatikus (3 legfrissebb)</span>
   <span>Corner Prophet &bull; Csak t&aacute;j&eacute;koztat&oacute; c&eacute;lra &bull; Nem fogad&aacute;si tan&aacute;cs</span>
 </footer>
 </div>
@@ -202,11 +202,12 @@ footer{margin-top:40px;padding-top:20px;border-top:1px solid var(--brd);font-siz
 // ── DATA ────────────────────────────────────────────────────────────────────
 // CSV-k forrása: football-data.co.uk
 // GitHub Pages-en a /data/ mappából tölt; ha nem sikerül, beégetett sample adat
+// CSV fajlok dinamikusan a season_config.json alapjan
 var CSV_FILES = [
   'data/E0_2526.csv',
   'data/E0_2425.csv',
   'data/E0_2324.csv'
-];
+]; // fallback - felulirja a season_config ha elerheto
 
 var AM = [], T = [];
 
@@ -239,6 +240,25 @@ function setSt(cls, txt) {
 
 async function loadAll() {
   setSt('ld', 'Adatok betöltése...');
+
+  // Dinamikus szezon konfig betöltése
+  try {
+    var cfgResp = await fetch('data/season_config.json');
+    if (cfgResp.ok) {
+      var cfg = await cfgResp.json();
+      CSV_FILES = cfg.seasons.map(function(s){ return s.file; });
+      // Mindig újraszámoljuk az adaptív súlyokat
+      SEASON_W = calcSeasonWeights(cfg.seasons);
+      console.log('Szezon konfig betöltve:', JSON.stringify(
+        Object.fromEntries(Object.entries(SEASON_W).map(function(e){
+          return [e[0], Math.round(e[1]*1000)/10 + '%'];
+        }))
+      ));
+    }
+  } catch(e) {
+    console.log('season_config.json nem elérhető, fallback használata');
+  }
+
   var all = [];
   var loaded = 0;
   for (var i = 0; i < CSV_FILES.length; i++) {
@@ -246,8 +266,11 @@ async function loadAll() {
       var r = await fetch(CSV_FILES[i]);
       if (!r.ok) throw new Error('HTTP ' + r.status);
       var txt = await r.text();
-      var label = CSV_FILES[i].indexOf('2526') >= 0 ? '2025/26' :
-               CSV_FILES[i].indexOf('2425') >= 0 ? '2024/25' : '2023/24';
+      // Szezon cimke kinyerese a fajlnévbol (pl. E0_2526.csv -> 2025/26)
+  var match2 = CSV_FILES[i].match(/E0_(\d{2})(\d{2})\.csv/);
+  var label = match2
+    ? '20'+match2[1]+'/20'+match2[2]
+    : CSV_FILES[i];
   var ms = parseCSV(txt, label);
       if (ms.length > 0) { all = all.concat(ms); loaded++; }
     } catch(e) { /* skip */ }
@@ -264,8 +287,15 @@ async function loadAll() {
   }
 
   AM = all;
+  // Csapatlista csak az aktualis szezonbol (2025/26)
+  // hogy ne szerepeljenek kiesett csapatok (pl. Leicester, Luton)
   var ts = new Set();
-  AM.forEach(function(m){ ts.add(m.HomeTeam); ts.add(m.AwayTeam); });
+  var currentSeason = AM.filter(function(m){ return m._s === '2025/26'; });
+  if (currentSeason.length > 0) {
+    currentSeason.forEach(function(m){ ts.add(m.HomeTeam); ts.add(m.AwayTeam); });
+  } else {
+    AM.forEach(function(m){ ts.add(m.HomeTeam); ts.add(m.AwayTeam); });
+  }
   T = Array.from(ts).sort();
 
   var hE = document.getElementById('ht'), aE = document.getElementById('at');
@@ -289,7 +319,23 @@ async function loadAll() {
 // ── MODEL v0.3 ───────────────────────────────────────────────────────────────
 
 // Season weights: 2024/25=60%, 2023/24=30%, 2022/23=10%
-var SEASON_W = { '2025/26': 0.6, '2024/25': 0.3, '2023/24': 0.1 };
+// Szezon sulyzok - dinamikusan szamitva (meccsszam x idofaktor)
+// Idofaktorok: aktualis=1.0, tavalyi=0.6, ketevvel korabbi=0.3
+var TIME_FACTORS = [1.0, 0.6, 0.3];
+var SEASON_W = {}; // loadAll() tölti fel a season_config.json alapján
+
+function calcSeasonWeights(seasons) {
+  var raw = {};
+  seasons.forEach(function(s, i) {
+    var tf = TIME_FACTORS[i] !== undefined ? TIME_FACTORS[i] : 0.1;
+    raw[s.label] = s.matches * tf;
+  });
+  var total = Object.values(raw).reduce(function(a,b){return a+b;}, 0);
+  if (total === 0) return {};
+  var result = {};
+  Object.keys(raw).forEach(function(k){ result[k] = raw[k] / total; });
+  return result;
+}
 function sw(m) { return SEASON_W[m._s] || 0.1; }
 
 function pDate(d) {

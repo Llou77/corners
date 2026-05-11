@@ -20,12 +20,41 @@ PRED_DIR = "predictions"
 HIST_FILE = f"{PRED_DIR}/history.json"
 SUM_FILE  = f"{PRED_DIR}/summary.json"
 
-CSV_FILES = {
-    "2025/26": f"{DATA_DIR}/E0_2526.csv",
-    "2024/25": f"{DATA_DIR}/E0_2425.csv",
-    "2023/24": f"{DATA_DIR}/E0_2324.csv",
-}
-SEASON_W = {"2025/26": 0.6, "2024/25": 0.3, "2023/24": 0.1}
+# Dinamikus szezon-konfiguráció betöltése
+# Súlyozás: meccsszám-arányos + időbeli leértékelés (1.0 / 0.6 / 0.3)
+TIME_FACTORS = [1.0, 0.6, 0.3]
+
+def calc_season_weights(seasons):
+    raw = {}
+    for i, s in enumerate(seasons):
+        tf = TIME_FACTORS[i] if i < len(TIME_FACTORS) else 0.1
+        raw[s["label"]] = s["matches"] * tf
+    total = sum(raw.values())
+    if total == 0:
+        return {s["label"]: 1/len(seasons) for s in seasons}
+    return {label: round(val/total, 4) for label, val in raw.items()}
+
+def load_season_config():
+    config_path = f"{DATA_DIR}/season_config.json"
+    try:
+        with open(config_path) as f:
+            cfg = json.load(f)
+        csv_files = {s["label"]: s["file"] for s in cfg["seasons"]}
+        # Mindig újraszámoljuk a súlyokat (nem a mentett értékeket használjuk)
+        weights = calc_season_weights(cfg["seasons"])
+        print(f"Szezon konfig: {[(k, round(v*100,1)) for k,v in weights.items()]}")
+        return csv_files, weights
+    except Exception as e:
+        print(f"WARN: season_config.json nem olvasható ({e}), fallback")
+        csv_files = {
+            "2025/26": f"{DATA_DIR}/E0_2526.csv",
+            "2024/25": f"{DATA_DIR}/E0_2425.csv",
+            "2023/24": f"{DATA_DIR}/E0_2324.csv",
+        }
+        weights = {"2025/26": 0.5, "2024/25": 0.33, "2023/24": 0.17}
+        return csv_files, weights
+
+CSV_FILES, SEASON_W = load_season_config()
 
 # ── HELPERS ───────────────────────────────────────────────────────────────────
 

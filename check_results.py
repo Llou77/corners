@@ -15,7 +15,23 @@ FDORG_TOKEN = os.environ.get("FDORG_TOKEN", "")
 PRED_DIR  = "predictions"
 HIST_FILE = f"{PRED_DIR}/history.json"
 SUM_FILE  = f"{PRED_DIR}/summary.json"
-SEASON_W  = {"2025/26": 0.6, "2024/25": 0.3, "2023/24": 0.1}
+TIME_FACTORS = [1.0, 0.6, 0.3]
+
+def load_season_weights():
+    try:
+        with open("data/season_config.json") as f:
+            cfg = json.load(f)
+        seasons = cfg["seasons"]
+        raw = {}
+        for i, s in enumerate(seasons):
+            tf = TIME_FACTORS[i] if i < len(TIME_FACTORS) else 0.1
+            raw[s["label"]] = s["matches"] * tf
+        total = sum(raw.values())
+        return {k: round(v/total, 4) for k,v in raw.items()} if total else {"2025/26": 0.5, "2024/25": 0.33, "2023/24": 0.17}
+    except:
+        return {"2025/26": 0.5, "2024/25": 0.33, "2023/24": 0.17}
+
+SEASON_W = load_season_weights()
 
 def load_json(path, default):
     try:
