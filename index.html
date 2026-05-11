@@ -97,7 +97,7 @@ footer{margin-top:40px;padding-top:20px;border-top:1px solid var(--brd);font-siz
     <div class="logo-ico">&#x26BD;</div>
     <div class="logo-text">
       <h1>Corner Prophet</h1>
-      <p>Premier League &bull; Sz&ouml;glet El&#337;rejelz&#337; &bull; v0.2</p>
+      <p>Premier League &bull; Sz&ouml;glet El&#337;rejelz&#337; &bull; v0.3</p>
     </div>
   </div>
   <div class="badge"><div class="dot"></div><span>2022&ndash;25 szezon</span></div>
@@ -116,8 +116,7 @@ footer{margin-top:40px;padding-top:20px;border-top:1px solid var(--brd);font-siz
     <div class="ts"><label>Vend&eacute;g csapat</label><select id="at"><option value="">&#8212; Bet&ouml;lt&eacute;s... &#8212;</option></select></div>
   </div>
   <div class="opts">
-    <div class="og"><label>Meccsek sz&aacute;ma</label><select id="mw"><option value="5">Utols&oacute; 5</option><option value="7" selected>Utols&oacute; 7</option><option value="10">Utols&oacute; 10</option><option value="20">Utols&oacute; 20</option><option value="all">&Ouml;sszes</option></select></div>
-    <div class="og"><label>Forma trend</label><select id="tw"><option value="none">Nincs (egyenl&#337;)</option><option value="linear" selected>Line&aacute;ris (&uacute;jabb = fontosabb)</option><option value="exp">Exponenci&aacute;lis</option></select></div>
+    <div class="og"><label>Figyelembe vett meccsek</label><select id="mw"><option value="5">Utols&oacute; 5</option><option value="7" selected>Utols&oacute; 7</option><option value="10">Utols&oacute; 10</option><option value="20">Utols&oacute; 20</option><option value="all">&Ouml;sszes</option></select></div>
   </div>
   <div id="ep"></div>
   <button id="pbtn" onclick="runP()" disabled>&#x26BD; El&#337;rejelz&eacute;s futtat&aacute;sa</button>
@@ -133,17 +132,17 @@ footer{margin-top:40px;padding-top:20px;border-top:1px solid var(--brd);font-siz
     <div class="tp"><div class="tn" id="ran">&#8212;</div><div class="cn" id="rac" style="color:var(--acc2)">&#8212;</div><div class="cl">v&aacute;rhat&oacute; sz&ouml;glet</div></div>
   </div>
   <div class="sgrid">
-    <div class="sc"><div class="sl">Hazai &aacute;tlag (hazai meccsek)</div><div class="sv c1" id="shf">&#8212;</div></div>
-    <div class="sc"><div class="sl">Liga &aacute;tlag / meccs</div><div class="sv" id="slg">&#8212;</div></div>
-    <div class="sc"><div class="sl">Vend&eacute;g &aacute;tlag (vend&eacute;g meccsek)</div><div class="sv c2" id="saf">&#8212;</div></div>
-    <div class="sc"><div class="sl">Kapott sz&ouml;glet (hazai)</div><div class="sv" id="sha">&#8212;</div></div>
-    <div class="sc"><div class="sl">Adatb&aacute;zis meccsek</div><div class="sv" id="stm">&#8212;</div></div>
-    <div class="sc"><div class="sl">Kapott sz&ouml;glet (vend&eacute;g)</div><div class="sv" id="saa">&#8212;</div></div>
+    <div class="sc"><div class="sl">Hazai t&aacute;madó index</div><div class="sv c1" id="shf">&#8212;</div></div>
+    <div class="sc"><div class="sl">Liga átlag / meccs</div><div class="sv" id="slg">&#8212;</div></div>
+    <div class="sc"><div class="sl">Vendég támadó index</div><div class="sv c2" id="saf">&#8212;</div></div>
+    <div class="sc"><div class="sl">Taktikai véd. index (hazai ellen)</div><div class="sv" id="sha">&#8212;</div></div>
+    <div class="sc"><div class="sl">Adatbázis meccsek</div><div class="sv" id="stm">&#8212;</div></div>
+    <div class="sc"><div class="sl">Taktikai véd. index (vendég ellen)</div><div class="sv" id="saa">&#8212;</div></div>
   </div>
   <div class="rp2"><h4>Val&oacute;sz&iacute;n&#369;s&eacute;gi tartom&aacute;nyok</h4><div id="rb"></div></div>
   <div class="fp"><h4>Legut&oacute;bbi meccsek &mdash; k&eacute;k = hazai sz&ouml;gletek &bull; narancs = vend&eacute;g sz&ouml;gletek</h4><div class="fgrid" id="fg"></div></div>
   <div class="mp">
-    <div class="mt2">Model v0.2 &bull; Attack/Defense Index + Poisson + Súlyozott szezon (60/30/10)</div>
+    <div class="mt2">Model v0.3 &bull; Taktikai index + Hazai/vendég forma + Szezon-pozíció súlyozás</div>
     <div class="mfml" id="mfml">&#8212;</div>
     <div class="cbar"><div class="clbl">Adatbiztons&aacute;g</div><div class="ctrk"><div class="cfil" id="cfil" style="width:0%"></div></div><div class="cpct" id="cpct">&#8212;</div></div>
   </div>
@@ -241,7 +240,12 @@ async function loadAll() {
   document.getElementById('pbtn').disabled = false;
 }
 
-// ── MODEL ────────────────────────────────────────────────────────────────────
+// ── MODEL v0.3 ───────────────────────────────────────────────────────────────
+
+// Season weights: 2024/25=60%, 2023/24=30%, 2022/23=10%
+var SEASON_W = { '2024/25': 0.6, '2023/24': 0.3, '2022/23': 0.1 };
+function sw(m) { return SEASON_W[m._s] || 0.1; }
+
 function pDate(d) {
   if (!d) return 0;
   var p = d.split('/');
@@ -252,48 +256,92 @@ function pDate(d) {
   return new Date(d).getTime() || 0;
 }
 
+// Get last N matches for a team in a given role (home/away), sorted newest first
 function getMs(team, role, w) {
   var ms = AM.filter(function(m){ return role === 'home' ? m.HomeTeam === team : m.AwayTeam === team; });
   ms.sort(function(a,b){ return pDate(b.Date) - pDate(a.Date); });
   return w === 'all' ? ms : ms.slice(0, parseInt(w));
 }
 
-function wavg(vals, mode) {
-  if (!vals.length) return 0;
-  if (mode === 'none') return vals.reduce(function(a,b){ return a+b; }, 0) / vals.length;
-  var ws = 0, vs = 0;
-  vals.forEach(function(v,i){
-    var w = mode === 'exp' ? Math.pow(2, vals.length-1-i) : (vals.length-i);
-    vs += v*w; ws += w;
-  });
-  return vs/ws;
+// ── B) Within-season position weighting ──────────────────────────────────────
+// Matches earlier in the current season get 70% weight vs later matches
+// Only applies within 2024/25; older seasons already handled by SEASON_W
+function inSeasonWeight(m, seasonMatches) {
+  if (m._s !== '2024/25') return 1.0;
+  // Find position of this match within current season matches (sorted newest first)
+  var idx = seasonMatches.indexOf(m);
+  if (idx < 0) return 1.0;
+  var n = seasonMatches.length;
+  if (n <= 1) return 1.0;
+  // Most recent = 1.0, oldest current season = 0.7, linear interpolation
+  return 1.0 - (idx / (n - 1)) * 0.3;
 }
 
-// ── SEASON WEIGHTS (v0.2) ────────────────────────────────────────────────────
-// 2024/25 = 60%, 2023/24 = 30%, 2022/23 = 10%
-var SEASON_W = { '2024/25': 0.6, '2023/24': 0.3, '2022/23': 0.1 };
+// ── C) Home/Away separate form weighting ─────────────────────────────────────
+// Already handled by getMs(role='home'/'away') — but now we also apply
+// within-season position weight per role separately
 
-function seasonWeight(m) {
-  return SEASON_W[m._s] !== undefined ? SEASON_W[m._s] : 0.1;
+// Combined weight: season_w * in_season_position_w
+function matchWeight(m, idx, total) {
+  var baseW = sw(m);
+  // Linear recency within the window (newest=total, oldest=1)
+  var recencyW = (total - idx);
+  return baseW * recencyW;
 }
 
-// Weighted average with both recency (form) AND season weight
-function wavgSeason(matches, valFn, trendMode) {
+// Weighted average using combined weights
+function wavgCombined(matches, valFn) {
   if (!matches.length) return 0;
   var total = 0, wsum = 0;
   matches.forEach(function(m, i) {
-    var sw = seasonWeight(m);
-    var fw = trendMode === 'exp' ? Math.pow(2, matches.length-1-i)
-           : trendMode === 'none' ? 1
-           : (matches.length - i);
-    var w = sw * fw;
+    var w = matchWeight(m, i, matches.length);
     total += valFn(m) * w;
     wsum  += w;
   });
   return wsum > 0 ? total / wsum : 0;
 }
 
-// Poisson probability: P(X = k) = e^-lambda * lambda^k / k!
+// ── A) Tactical Defense Index ─────────────────────────────────────────────────
+// How many corners does a team CONCEDE per match (as home/away)?
+// High value = deep defending = opponent gets more corners
+// Computed from current season only (most tactically relevant)
+// Returns index relative to league average (1.0 = average)
+function tacticalDefIdx(team, role) {
+  // role: 'home' means team IS the home team, we measure corners conceded at home
+  // i.e. AC when HomeTeam === team (away team's corners at that venue)
+  var currSeason = AM.filter(function(m){
+    return m._s === '2024/25' && (role === 'home' ? m.HomeTeam === team : m.AwayTeam === team);
+  });
+  if (!currSeason.length) {
+    // Fallback to all seasons
+    currSeason = AM.filter(function(m){
+      return role === 'home' ? m.HomeTeam === team : m.AwayTeam === team;
+    });
+  }
+  if (!currSeason.length) return 1.0;
+  var conceded = currSeason.map(function(m){ return role === 'home' ? m.AC : m.HC; });
+  var teamAvg = conceded.reduce(function(a,b){return a+b;},0) / conceded.length;
+
+  // League average conceded in same role
+  var lgMs = AM.filter(function(m){ return m._s === '2024/25'; });
+  if (!lgMs.length) lgMs = AM;
+  var lgVals = lgMs.map(function(m){ return role === 'home' ? m.AC : m.HC; });
+  var lgAvg = lgVals.reduce(function(a,b){return a+b;},0) / lgVals.length;
+
+  return lgAvg > 0 ? teamAvg / lgAvg : 1.0;
+}
+
+// Season-weighted league averages
+function lgAvgs() {
+  var wH = 0, wA = 0, wS = 0;
+  AM.forEach(function(m){
+    var w = sw(m);
+    wH += m.HC * w; wA += m.AC * w; wS += w;
+  });
+  return { H: wS > 0 ? wH/wS : 5, A: wS > 0 ? wA/wS : 5 };
+}
+
+// Poisson probability P(X = k)
 function poisson(lambda, k) {
   if (lambda <= 0) return k === 0 ? 1 : 0;
   var logP = -lambda + k * Math.log(lambda);
@@ -301,46 +349,48 @@ function poisson(lambda, k) {
   return Math.exp(logP);
 }
 
-// P(total corners > threshold) using Poisson convolution
-function poissonOver(lambdaH, lambdaA, threshold) {
-  var maxK = 40;
+// P(homeCorners + awayCorners > threshold)
+function poissonOver(lH, lA, threshold) {
   var prob = 0;
-  for (var h = 0; h <= maxK; h++) {
-    for (var a = 0; a <= maxK; a++) {
-      if (h + a > threshold) {
-        prob += poisson(lambdaH, h) * poisson(lambdaA, a);
-      }
+  for (var h = 0; h <= 35; h++) {
+    for (var a = 0; a <= 35; a++) {
+      if (h + a > threshold) prob += poisson(lH, h) * poisson(lA, a);
     }
   }
   return Math.min(prob, 1);
 }
 
-function calc(ht, at, win, tr) {
-  var hH = getMs(ht,'home',win), aA = getMs(at,'away',win);
+// ── MAIN CALC ────────────────────────────────────────────────────────────────
+function calc(ht, at, win) {
+  var hH = getMs(ht, 'home', win);
+  var aA = getMs(at, 'away', win);
   if (!hH.length) throw new Error('Nincs hazai meccsadat: ' + ht);
   if (!aA.length) throw new Error('Nincs vendég meccsadat: ' + at);
 
-  // Season-weighted + form-weighted averages
-  var hFor = wavgSeason(hH, function(m){return m.HC;}, tr);
-  var hAg  = wavgSeason(hH, function(m){return m.AC;}, tr);
-  var aFor = wavgSeason(aA, function(m){return m.AC;}, tr);
-  var aAg  = wavgSeason(aA, function(m){return m.HC;}, tr);
+  var lg = lgAvgs();
 
-  // League average — also season-weighted
-  var lgWH = 0, lgWA = 0, lgWsum = 0;
-  AM.forEach(function(m){
-    var w = seasonWeight(m);
-    lgWH += m.HC * w; lgWA += m.AC * w; lgWsum += w;
-  });
-  var lgH = lgWH / lgWsum;
-  var lgA = lgWA / lgWsum;
+  // C) Home/Away separate: attack = corners generated, defense = corners conceded
+  var hFor = wavgCombined(hH, function(m){return m.HC;}); // Home team corners at home
+  var aFor = wavgCombined(aA, function(m){return m.AC;}); // Away team corners away
 
-  var hAtk=hFor/lgH, aAtk=aFor/lgA, hDef=hAg/lgA, aDef=aAg/lgH;
-  var pH=parseFloat((lgH*hAtk*aDef).toFixed(2));
-  var pA=parseFloat((lgA*aAtk*hDef).toFixed(2));
-  var pT=parseFloat((pH+pA).toFixed(2));
+  // Attack indices (relative to league)
+  var hAtk = lg.H > 0 ? hFor / lg.H : 1;
+  var aAtk = lg.A > 0 ? aFor / lg.A : 1;
 
-  // Poisson probabilities for all thresholds
+  // A) Tactical defense index: how many corners does the OPPONENT get vs this team?
+  // hDef = how many corners Away teams get when playing AT home_team's ground
+  // aDef = how many corners Home teams get when Away_team is defending away
+  var hDefIdx = tacticalDefIdx(ht, 'home'); // corners conceded by ht at home (= away team's corners)
+  var aDefIdx = tacticalDefIdx(at, 'away'); // corners conceded by at away (= home team's corners)
+
+  // Expected corners:
+  // Home corners = lg_home_avg * home_attack_idx * away_defensive_style_idx
+  // Away corners = lg_away_avg * away_attack_idx * home_defensive_style_idx
+  var pH = parseFloat((lg.H * hAtk * aDefIdx).toFixed(2));
+  var pA = parseFloat((lg.A * aAtk * hDefIdx).toFixed(2));
+  var pT = parseFloat((pH + pA).toFixed(2));
+
+  // Poisson thresholds
   var thresholds = [6.5, 7.5, 8.5, 9.5, 10.5, 11.5, 12.5];
   var poisProbs = {};
   thresholds.forEach(function(t){
@@ -349,93 +399,113 @@ function calc(ht, at, win, tr) {
 
   var conf = Math.min(95, 40 + Math.min(hH.length, aA.length) * 5);
 
-  return { pH:pH, pA:pA, pT:pT,
-    hFor:parseFloat(hFor.toFixed(2)), hAg:parseFloat(hAg.toFixed(2)),
-    aFor:parseFloat(aFor.toFixed(2)), aAg:parseFloat(aAg.toFixed(2)),
-    lgAvg:parseFloat((lgH+lgA).toFixed(2)),
-    hAtk:parseFloat(hAtk.toFixed(3)), aAtk:parseFloat(aAtk.toFixed(3)),
-    hDef:parseFloat(hDef.toFixed(3)), aDef:parseFloat(aDef.toFixed(3)),
-    poisProbs:poisProbs, thresholds:thresholds,
-    conf:conf, tm:AM.length, hR:hH.slice(0,6), aR:aA.slice(0,6) };
+  return {
+    pH: pH, pA: pA, pT: pT,
+    hFor: parseFloat(hFor.toFixed(2)),
+    aFor: parseFloat(aFor.toFixed(2)),
+    hAtk: parseFloat(hAtk.toFixed(3)),
+    aAtk: parseFloat(aAtk.toFixed(3)),
+    hDefIdx: parseFloat(hDefIdx.toFixed(3)),
+    aDefIdx: parseFloat(aDefIdx.toFixed(3)),
+    lgAvg: parseFloat((lg.H + lg.A).toFixed(2)),
+    poisProbs: poisProbs, thresholds: thresholds,
+    conf: conf, tm: AM.length,
+    hR: hH.slice(0,6), aR: aA.slice(0,6)
+  };
 }
 
 function runP() {
-  var ht=document.getElementById('ht').value;
-  var at=document.getElementById('at').value;
-  var win=document.getElementById('mw').value;
-  var tr=document.getElementById('tw').value;
-  var ep=document.getElementById('ep');
-  ep.style.display='none';
+  var ht = document.getElementById('ht').value;
+  var at = document.getElementById('at').value;
+  var win = document.getElementById('mw').value;
+  var ep = document.getElementById('ep');
+  ep.style.display = 'none';
   if (!ht||!at){ep.textContent='Kérlek válassz ki mindkét csapatot!';ep.style.display='block';return;}
   if (ht===at){ep.textContent='A két csapat nem lehet ugyanaz!';ep.style.display='block';return;}
-  document.getElementById('lding').style.display='block';
-  document.getElementById('rp').style.display='none';
+  document.getElementById('lding').style.display = 'block';
+  document.getElementById('rp').style.display = 'none';
   setTimeout(function(){
-    try { var r=calc(ht,at,win,tr); disp(r,ht,at); }
+    try { var r = calc(ht, at, win); disp(r, ht, at); }
     catch(e) { ep.textContent='Hiba: '+e.message; ep.style.display='block'; }
-    document.getElementById('lding').style.display='none';
+    document.getElementById('lding').style.display = 'none';
   }, 200);
 }
 
 function disp(r, ht, at) {
-  document.getElementById('rp').style.display='block';
-  document.getElementById('mtt').textContent=ht+' vs '+at;
-  document.getElementById('rhn').textContent=ht;
-  document.getElementById('ran').textContent=at;
-  document.getElementById('rhc').textContent=r.pH.toFixed(1);
-  document.getElementById('rac').textContent=r.pA.toFixed(1);
-  document.getElementById('rtot').textContent=r.pT.toFixed(1);
-  document.getElementById('shf').textContent=r.hFor.toFixed(1);
-  document.getElementById('saf').textContent=r.aFor.toFixed(1);
-  document.getElementById('slg').textContent=r.lgAvg.toFixed(1);
-  document.getElementById('sha').textContent=r.hAg.toFixed(1);
-  document.getElementById('saa').textContent=r.aAg.toFixed(1);
-  document.getElementById('stm').textContent=r.tm;
-  var T=r.pT;
-  // Top 3 bars: raw expected values
-  var topRanges=[
-    {l:'Hazai szögletek',v:r.pH,m:12,c:'rfh'},
-    {l:'Vendég szögletek',v:r.pA,m:12,c:'rfa'},
-    {l:'Össz várható',v:T,m:22,c:'rfb'}
+  document.getElementById('rp').style.display = 'block';
+  document.getElementById('mtt').textContent = ht + ' vs ' + at;
+  document.getElementById('rhn').textContent = ht;
+  document.getElementById('ran').textContent = at;
+  document.getElementById('rhc').textContent = r.pH.toFixed(1);
+  document.getElementById('rac').textContent = r.pA.toFixed(1);
+  document.getElementById('rtot').textContent = r.pT.toFixed(1);
+
+  // Stats grid
+  document.getElementById('shf').textContent = r.hAtk.toFixed(2) + 'x';
+  document.getElementById('saf').textContent = r.aAtk.toFixed(2) + 'x';
+  document.getElementById('slg').textContent = r.lgAvg.toFixed(1);
+  document.getElementById('sha').textContent = r.hDefIdx.toFixed(2) + 'x';
+  document.getElementById('saa').textContent = r.aDefIdx.toFixed(2) + 'x';
+  document.getElementById('stm').textContent = r.tm;
+
+  // Range bars
+  var T = r.pT;
+  var topRanges = [
+    {l:'Hazai várható szöglet', v:r.pH, m:14, c:'rfh'},
+    {l:'Vendég várható szöglet', v:r.pA, m:14, c:'rfa'},
+    {l:'Össz várható', v:T, m:24, c:'rfb'}
   ];
-  // Poisson probability bars
   var poisRows = r.thresholds.map(function(t, i){
     var pOver = r.poisProbs[t];
     var pUnder = parseFloat((100 - pOver).toFixed(1));
     var cls = i % 3 === 0 ? 'rfh' : i % 3 === 1 ? 'rfa' : 'rfb';
     return {t:t, over:pOver, under:pUnder, cls:cls};
   });
-  document.getElementById('rb').innerHTML=
+
+  document.getElementById('rb').innerHTML =
     topRanges.map(function(rb){
-      var w=Math.min(100,rb.v/rb.m*100).toFixed(1);
-      return '<div class="rrow"><div class="rl">'+rb.l+'</div><div class="rt"><div class="rf '+rb.c+'" style="width:'+w+'%"></div></div><div class="rv">'+rb.v.toFixed(1)+'</div></div>';
+      var w = Math.min(100, rb.v/rb.m*100).toFixed(1);
+      return '<div class="rrow"><div class="rl">'+rb.l+'</div>'+
+             '<div class="rt"><div class="rf '+rb.c+'" style="width:'+w+'%"></div></div>'+
+             '<div class="rv">'+rb.v.toFixed(1)+'</div></div>';
     }).join('') +
-    '<div style="height:1px;background:var(--brd);margin:14px 0"></div>' +
-    '<div style="font-size:.6rem;letter-spacing:.12em;text-transform:uppercase;color:var(--dim);margin-bottom:12px">Poisson valószínűségek</div>' +
+    '<div style="height:1px;background:var(--brd);margin:14px 0"></div>'+
+    '<div style="font-size:.6rem;letter-spacing:.12em;text-transform:uppercase;color:var(--dim);margin-bottom:12px">Poisson valószínűségek (felett % / alatt %)</div>'+
     poisRows.map(function(pr){
       return '<div class="rrow">'+
-        '<div class="rl" style="font-size:.68rem">Felett '+pr.t+'</div>'+
+        '<div class="rl" style="font-size:.68rem">'+pr.t+' felett</div>'+
         '<div class="rt"><div class="rf '+pr.cls+'" style="width:'+pr.over+'%"></div></div>'+
-        '<div class="rv" style="min-width:52px">'+pr.over+'%<span style="color:var(--dim);font-size:.65rem"> / '+pr.under+'%</span></div>'+
+        '<div class="rv" style="min-width:60px">'+pr.over+'%'+
+        '<span style="color:var(--dim);font-size:.62rem"> / '+pr.under+'%</span></div>'+
         '</div>';
     }).join('');
-  function ff(ms,isH){
-    if(!ms.length) return '<div style="color:var(--dim);font-size:.72rem;padding:6px 0">Nincs adat</div>';
+
+  // Form table
+  function ff(ms, isH) {
+    if (!ms.length) return '<div style="color:var(--dim);font-size:.72rem;padding:6px 0">Nincs adat</div>';
     return ms.map(function(m){
-      return '<div class="frow"><div class="fd">'+(m.Date||'?')+'</div><div class="fo">'+(isH?m.AwayTeam:m.HomeTeam)+'</div><div class="cb cbh">'+m.HC+'</div><div class="cb cba">'+m.AC+'</div></div>';
+      return '<div class="frow">'+
+        '<div class="fd">'+(m.Date||'?')+'</div>'+
+        '<div class="fo">'+(isH ? m.AwayTeam : m.HomeTeam)+'</div>'+
+        '<div class="cb cbh">'+m.HC+'</div>'+
+        '<div class="cb cba">'+m.AC+'</div>'+
+        '</div>';
     }).join('');
   }
-  document.getElementById('fg').innerHTML=
-    '<div><div class="ftt">'+ht+' (hazai)</div>'+ff(r.hR,true)+'</div>'+
-    '<div><div class="ftt">'+at+' (vendég)</div>'+ff(r.aR,false)+'</div>';
-  document.getElementById('mfml').textContent=
-    'H: '+r.lgAvg.toFixed(1)+'/2 x atk('+r.hAtk+') x def('+r.aDef+') | A: '+r.lgAvg.toFixed(1)+'/2 x atk('+r.aAtk+') x def('+r.hDef+')';
-  document.getElementById('cpct').textContent=r.conf+'%';
-  setTimeout(function(){document.getElementById('cfil').style.width=r.conf+'%';},100);
-  document.getElementById('rp').scrollIntoView({behavior:'smooth',block:'start'});
+  document.getElementById('fg').innerHTML =
+    '<div><div class="ftt">'+ht+' (hazai)</div>'+ff(r.hR, true)+'</div>'+
+    '<div><div class="ftt">'+at+' (vendég)</div>'+ff(r.aR, false)+'</div>';
+
+  // Model info
+  document.getElementById('mfml').textContent =
+    'H: lg('+r.lgAvg.toFixed(1)+') x atk('+r.hAtk+') x tact_def('+r.aDefIdx+') | '+
+    'A: lg('+r.lgAvg.toFixed(1)+') x atk('+r.aAtk+') x tact_def('+r.hDefIdx+')';
+
+  document.getElementById('cpct').textContent = r.conf + '%';
+  setTimeout(function(){ document.getElementById('cfil').style.width = r.conf+'%'; }, 100);
+  document.getElementById('rp').scrollIntoView({behavior:'smooth', block:'start'});
 }
 
 loadAll();
 </script>
 </body>
-</html>
