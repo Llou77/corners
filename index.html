@@ -97,7 +97,7 @@ footer{margin-top:40px;padding-top:20px;border-top:1px solid var(--brd);font-siz
     <div class="logo-ico">&#x26BD;</div>
     <div class="logo-text">
       <h1>Corner Prophet</h1>
-      <p>Premier League &bull; Sz&ouml;glet El&#337;rejelz&#337; &bull; v0.1</p>
+      <p>Premier League &bull; Sz&ouml;glet El&#337;rejelz&#337; &bull; v0.2</p>
     </div>
   </div>
   <div class="badge"><div class="dot"></div><span>2022&ndash;25 szezon</span></div>
@@ -116,7 +116,7 @@ footer{margin-top:40px;padding-top:20px;border-top:1px solid var(--brd);font-siz
     <div class="ts"><label>Vend&eacute;g csapat</label><select id="at"><option value="">&#8212; Bet&ouml;lt&eacute;s... &#8212;</option></select></div>
   </div>
   <div class="opts">
-    <div class="og"><label>Meccsek sz&aacute;ma</label><select id="mw"><option value="5">Utols&oacute; 5</option><option value="10" selected>Utols&oacute; 10</option><option value="20">Utols&oacute; 20</option><option value="all">&Ouml;sszes</option></select></div>
+    <div class="og"><label>Meccsek sz&aacute;ma</label><select id="mw"><option value="5">Utols&oacute; 5</option><option value="7" selected>Utols&oacute; 7</option><option value="10">Utols&oacute; 10</option><option value="20">Utols&oacute; 20</option><option value="all">&Ouml;sszes</option></select></div>
     <div class="og"><label>Forma trend</label><select id="tw"><option value="none">Nincs (egyenl&#337;)</option><option value="linear" selected>Line&aacute;ris (&uacute;jabb = fontosabb)</option><option value="exp">Exponenci&aacute;lis</option></select></div>
   </div>
   <div id="ep"></div>
@@ -143,7 +143,7 @@ footer{margin-top:40px;padding-top:20px;border-top:1px solid var(--brd);font-siz
   <div class="rp2"><h4>Val&oacute;sz&iacute;n&#369;s&eacute;gi tartom&aacute;nyok</h4><div id="rb"></div></div>
   <div class="fp"><h4>Legut&oacute;bbi meccsek &mdash; k&eacute;k = hazai sz&ouml;gletek &bull; narancs = vend&eacute;g sz&ouml;gletek</h4><div class="fgrid" id="fg"></div></div>
   <div class="mp">
-    <div class="mt2">Model v1 &bull; Attack/Defense Index</div>
+    <div class="mt2">Model v0.2 &bull; Attack/Defense Index + Poisson + Súlyozott szezon (60/30/10)</div>
     <div class="mfml" id="mfml">&#8212;</div>
     <div class="cbar"><div class="clbl">Adatbiztons&aacute;g</div><div class="ctrk"><div class="cfil" id="cfil" style="width:0%"></div></div><div class="cpct" id="cpct">&#8212;</div></div>
   </div>
@@ -269,27 +269,94 @@ function wavg(vals, mode) {
   return vs/ws;
 }
 
+// ── SEASON WEIGHTS (v0.2) ────────────────────────────────────────────────────
+// 2024/25 = 60%, 2023/24 = 30%, 2022/23 = 10%
+var SEASON_W = { '2024/25': 0.6, '2023/24': 0.3, '2022/23': 0.1 };
+
+function seasonWeight(m) {
+  return SEASON_W[m._s] !== undefined ? SEASON_W[m._s] : 0.1;
+}
+
+// Weighted average with both recency (form) AND season weight
+function wavgSeason(matches, valFn, trendMode) {
+  if (!matches.length) return 0;
+  var total = 0, wsum = 0;
+  matches.forEach(function(m, i) {
+    var sw = seasonWeight(m);
+    var fw = trendMode === 'exp' ? Math.pow(2, matches.length-1-i)
+           : trendMode === 'none' ? 1
+           : (matches.length - i);
+    var w = sw * fw;
+    total += valFn(m) * w;
+    wsum  += w;
+  });
+  return wsum > 0 ? total / wsum : 0;
+}
+
+// Poisson probability: P(X = k) = e^-lambda * lambda^k / k!
+function poisson(lambda, k) {
+  if (lambda <= 0) return k === 0 ? 1 : 0;
+  var logP = -lambda + k * Math.log(lambda);
+  for (var i = 1; i <= k; i++) logP -= Math.log(i);
+  return Math.exp(logP);
+}
+
+// P(total corners > threshold) using Poisson convolution
+function poissonOver(lambdaH, lambdaA, threshold) {
+  var maxK = 40;
+  var prob = 0;
+  for (var h = 0; h <= maxK; h++) {
+    for (var a = 0; a <= maxK; a++) {
+      if (h + a > threshold) {
+        prob += poisson(lambdaH, h) * poisson(lambdaA, a);
+      }
+    }
+  }
+  return Math.min(prob, 1);
+}
+
 function calc(ht, at, win, tr) {
   var hH = getMs(ht,'home',win), aA = getMs(at,'away',win);
   if (!hH.length) throw new Error('Nincs hazai meccsadat: ' + ht);
   if (!aA.length) throw new Error('Nincs vendég meccsadat: ' + at);
-  var hFor=wavg(hH.map(function(m){return m.HC;}),tr);
-  var hAg =wavg(hH.map(function(m){return m.AC;}),tr);
-  var aFor=wavg(aA.map(function(m){return m.AC;}),tr);
-  var aAg =wavg(aA.map(function(m){return m.HC;}),tr);
-  var lgH=AM.reduce(function(s,m){return s+m.HC;},0)/AM.length;
-  var lgA=AM.reduce(function(s,m){return s+m.AC;},0)/AM.length;
+
+  // Season-weighted + form-weighted averages
+  var hFor = wavgSeason(hH, function(m){return m.HC;}, tr);
+  var hAg  = wavgSeason(hH, function(m){return m.AC;}, tr);
+  var aFor = wavgSeason(aA, function(m){return m.AC;}, tr);
+  var aAg  = wavgSeason(aA, function(m){return m.HC;}, tr);
+
+  // League average — also season-weighted
+  var lgWH = 0, lgWA = 0, lgWsum = 0;
+  AM.forEach(function(m){
+    var w = seasonWeight(m);
+    lgWH += m.HC * w; lgWA += m.AC * w; lgWsum += w;
+  });
+  var lgH = lgWH / lgWsum;
+  var lgA = lgWA / lgWsum;
+
   var hAtk=hFor/lgH, aAtk=aFor/lgA, hDef=hAg/lgA, aDef=aAg/lgH;
   var pH=parseFloat((lgH*hAtk*aDef).toFixed(2));
   var pA=parseFloat((lgA*aAtk*hDef).toFixed(2));
-  return { pH:pH, pA:pA, pT:parseFloat((pH+pA).toFixed(2)),
+  var pT=parseFloat((pH+pA).toFixed(2));
+
+  // Poisson probabilities for all thresholds
+  var thresholds = [6.5, 7.5, 8.5, 9.5, 10.5, 11.5, 12.5];
+  var poisProbs = {};
+  thresholds.forEach(function(t){
+    poisProbs[t] = parseFloat((poissonOver(pH, pA, t) * 100).toFixed(1));
+  });
+
+  var conf = Math.min(95, 40 + Math.min(hH.length, aA.length) * 5);
+
+  return { pH:pH, pA:pA, pT:pT,
     hFor:parseFloat(hFor.toFixed(2)), hAg:parseFloat(hAg.toFixed(2)),
     aFor:parseFloat(aFor.toFixed(2)), aAg:parseFloat(aAg.toFixed(2)),
     lgAvg:parseFloat((lgH+lgA).toFixed(2)),
     hAtk:parseFloat(hAtk.toFixed(3)), aAtk:parseFloat(aAtk.toFixed(3)),
     hDef:parseFloat(hDef.toFixed(3)), aDef:parseFloat(aDef.toFixed(3)),
-    conf:Math.min(95,40+Math.min(hH.length,aA.length)*5),
-    tm:AM.length, hR:hH.slice(0,6), aR:aA.slice(0,6) };
+    poisProbs:poisProbs, thresholds:thresholds,
+    conf:conf, tm:AM.length, hR:hH.slice(0,6), aR:aA.slice(0,6) };
 }
 
 function runP() {
@@ -325,18 +392,33 @@ function disp(r, ht, at) {
   document.getElementById('saa').textContent=r.aAg.toFixed(1);
   document.getElementById('stm').textContent=r.tm;
   var T=r.pT;
-  var ranges=[
-    {l:'Hazai szögletek',v:r.pH,m:12,c:'rfh',p:false},
-    {l:'Vendég szögletek',v:r.pA,m:12,c:'rfa',p:false},
-    {l:'Össz szögletek',v:T,m:22,c:'rfb',p:false},
-    {l:'Alatt 8.5',v:T<8.5?68:32,m:100,c:'rfa',p:true},
-    {l:'Felett 8.5',v:T>=8.5?68:32,m:100,c:'rfh',p:true},
-    {l:'Felett 10.5',v:T>=10.5?62:22,m:100,c:'rfb',p:true}
+  // Top 3 bars: raw expected values
+  var topRanges=[
+    {l:'Hazai szögletek',v:r.pH,m:12,c:'rfh'},
+    {l:'Vendég szögletek',v:r.pA,m:12,c:'rfa'},
+    {l:'Össz várható',v:T,m:22,c:'rfb'}
   ];
-  document.getElementById('rb').innerHTML=ranges.map(function(rb){
-    var w=Math.min(100,rb.v/rb.m*100).toFixed(1);
-    return '<div class="rrow"><div class="rl">'+rb.l+'</div><div class="rt"><div class="rf '+rb.c+'" style="width:'+w+'%"></div></div><div class="rv">'+(rb.p?rb.v+'%':rb.v.toFixed(1))+'</div></div>';
-  }).join('');
+  // Poisson probability bars
+  var poisRows = r.thresholds.map(function(t, i){
+    var pOver = r.poisProbs[t];
+    var pUnder = parseFloat((100 - pOver).toFixed(1));
+    var cls = i % 3 === 0 ? 'rfh' : i % 3 === 1 ? 'rfa' : 'rfb';
+    return {t:t, over:pOver, under:pUnder, cls:cls};
+  });
+  document.getElementById('rb').innerHTML=
+    topRanges.map(function(rb){
+      var w=Math.min(100,rb.v/rb.m*100).toFixed(1);
+      return '<div class="rrow"><div class="rl">'+rb.l+'</div><div class="rt"><div class="rf '+rb.c+'" style="width:'+w+'%"></div></div><div class="rv">'+rb.v.toFixed(1)+'</div></div>';
+    }).join('') +
+    '<div style="height:1px;background:var(--brd);margin:14px 0"></div>' +
+    '<div style="font-size:.6rem;letter-spacing:.12em;text-transform:uppercase;color:var(--dim);margin-bottom:12px">Poisson valószínűségek</div>' +
+    poisRows.map(function(pr){
+      return '<div class="rrow">'+
+        '<div class="rl" style="font-size:.68rem">Felett '+pr.t+'</div>'+
+        '<div class="rt"><div class="rf '+pr.cls+'" style="width:'+pr.over+'%"></div></div>'+
+        '<div class="rv" style="min-width:52px">'+pr.over+'%<span style="color:var(--dim);font-size:.65rem"> / '+pr.under+'%</span></div>'+
+        '</div>';
+    }).join('');
   function ff(ms,isH){
     if(!ms.length) return '<div style="color:var(--dim);font-size:.72rem;padding:6px 0">Nincs adat</div>';
     return ms.map(function(m){
