@@ -15,9 +15,6 @@ from datetime import datetime, timezone
 FDORG_TOKEN = os.environ.get("FDORG_TOKEN", "")
 TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN", "")
 TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID", "")
-SMTP_USER = os.environ.get("SMTP_USER", "")
-SMTP_PASS = os.environ.get("SMTP_PASS", "")
-SMTP_TO = os.environ.get("SMTP_TO", "")
 
 DATA_DIR = "data"
 CSV_FILES = {
@@ -203,68 +200,6 @@ def format_telegram(fixtures, predictions, today):
     lines.append("\n_Corner Prophet v0.3 • Csak tájékoztató célra_")
     return "\n".join(lines)
 
-def format_email_html(fixtures, predictions, today):
-    rows = ""
-    if not fixtures:
-        rows = "<p>Ma nincs Premier League mérkőzés.</p>"
-    else:
-        for fix in fixtures:
-            home = fix["homeTeam"]["shortName"]
-            away = fix["awayTeam"]["shortName"]
-            time = fix["utcDate"][11:16]
-            pred = predictions.get(f"{home}|{away}")
-            rows += f"""
-            <div style="background:#10141c;border:1px solid #1e2736;padding:16px;margin:12px 0;border-radius:4px">
-              <div style="color:#8892a4;font-size:12px;margin-bottom:6px">{time} UTC</div>
-              <div style="color:#e8eaf0;font-size:18px;font-weight:bold;margin-bottom:10px">{home} vs {away}</div>
-            """
-            if pred:
-                rows += f"""
-              <div style="display:flex;gap:20px;margin-bottom:10px">
-                <div style="text-align:center">
-                  <div style="color:#5a6478;font-size:11px">HAZAI</div>
-                  <div style="color:#00e5ff;font-size:32px;font-weight:900">{pred["pH"]}</div>
-                </div>
-                <div style="text-align:center">
-                  <div style="color:#5a6478;font-size:11px">ÖSSZ</div>
-                  <div style="color:#a8ff3e;font-size:32px;font-weight:900">{pred["pT"]}</div>
-                </div>
-                <div style="text-align:center">
-                  <div style="color:#5a6478;font-size:11px">VENDÉG</div>
-                  <div style="color:#ff6b35;font-size:32px;font-weight:900">{pred["pA"]}</div>
-                </div>
-              </div>
-              <table style="width:100%;border-collapse:collapse;font-size:12px">
-                <tr style="color:#5a6478">
-                  <td>Határ</td><td>Felett %</td><td>Alatt %</td>
-                </tr>
-                """
-                for t, p in pred["probs"].items():
-                    under = round(100 - p, 1)
-                    color = "#a8ff3e" if p >= 60 else "#00e5ff" if p >= 40 else "#ff6b35"
-                    rows += f"""<tr style="color:#e8eaf0;border-top:1px solid #1e2736">
-                  <td style="padding:3px 0">{t}</td>
-                  <td style="color:{color};font-weight:bold">{p}%</td>
-                  <td style="color:#8892a4">{under}%</td>
-                </tr>"""
-                rows += "</table>"
-            else:
-                rows += '<div style="color:#ff6b35">⚠️ Nincs elegendő adat</div>'
-            rows += "</div>"
-
-    return f"""<!DOCTYPE html>
-<html><head><meta charset="UTF-8"></head>
-<body style="background:#0a0c10;color:#e8eaf0;font-family:monospace;padding:20px;max-width:600px">
-  <div style="border-bottom:1px solid #1e2736;padding-bottom:16px;margin-bottom:20px">
-    <h1 style="color:#00e5ff;font-size:24px;margin:0">⚽ Corner Prophet</h1>
-    <div style="color:#5a6478;font-size:12px">Napi Report • {today} • Premier League</div>
-  </div>
-  {rows}
-  <div style="border-top:1px solid #1e2736;padding-top:12px;margin-top:20px;color:#5a6478;font-size:11px">
-    Corner Prophet v0.3 • Csak tájékoztató célra • Nem fogadási tanács
-  </div>
-</body></html>"""
-
 # ── KÜLDÉS ────────────────────────────────────────────────────────────────────
 
 def send_telegram(text):
@@ -281,25 +216,6 @@ def send_telegram(text):
                                   headers={"Content-Type": "application/json"})
     with urllib.request.urlopen(req, timeout=10) as resp:
         print(f"Telegram: {resp.status}")
-
-def send_email(subject, html_body):
-    if not SMTP_USER or not SMTP_PASS or not SMTP_TO:
-        print("WARN: Email credentials missing, skipping")
-        return
-    import smtplib
-    from email.mime.multipart import MIMEMultipart
-    from email.mime.text import MIMEText
-    msg = MIMEMultipart("alternative")
-    msg["Subject"] = subject
-    msg["From"] = SMTP_USER
-    msg["To"] = SMTP_TO
-    msg.attach(MIMEText(html_body, "html", "utf-8"))
-    with smtplib.SMTP("smtp-mail.outlook.com", 587) as s:
-        s.ehlo()
-        s.starttls()
-        s.login(SMTP_USER, SMTP_PASS)
-        s.sendmail(SMTP_USER, SMTP_TO, msg.as_string())
-    print("Email: sent")
 
 # ── MAIN ──────────────────────────────────────────────────────────────────────
 
@@ -344,12 +260,9 @@ def main():
 
     # Formázás
     tg_text = format_telegram(fixtures, predictions, today)
-    email_html = format_email_html(fixtures, predictions, today)
-    subject = f"Corner Prophet — {today} — {len(fixtures)} PL meccs"
 
     # Küldés
     send_telegram(tg_text)
-    send_email(subject, email_html)
     print("Kész!")
 
 if __name__ == "__main__":
