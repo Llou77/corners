@@ -3,7 +3,7 @@ name: Corner Prophet - Napi Futtatások
 on:
   schedule:
     - cron: '0 4 * * *'   # 04:00 UTC = 06:00 Budapest — Eredmény ellenőrzés
-    - cron: '0 8 * * *'   # 08:00 UTC = 10:00 Budapest — Napi becslés + Telegram
+    - cron: '0 6 * * *'   # 06:00 UTC = 08:00 Budapest (max. ~2.5h késéssel ~10:30-ig)
   workflow_dispatch:
     inputs:
       job:
