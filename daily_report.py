@@ -98,12 +98,20 @@ def load_matches():
                 hc, ac = float(v[hci]), float(v[aci])
             except ValueError:
                 continue
-            all_matches.append({
+            row = {
                 "home": v[hi].strip(), "away": v[ai].strip(),
                 "HC": hc, "AC": ac,
                 "date": v[di].strip() if di >= 0 else "",
                 "_s": season,
-            })
+            }
+            # Extra stats
+            for f in ['HS','AS','HST','AST','HF','AF','HY','AY']:
+                try:
+                    fi = hdrs.index(f) if f in hdrs else -1
+                    row[f] = float(v[fi]) if fi >= 0 and fi < len(v) and v[fi].strip() else 0.0
+                except:
+                    row[f] = 0.0
+            all_matches.append(row)
     return all_matches
 
 # ── MODELL ────────────────────────────────────────────────────────────────────
@@ -166,12 +174,63 @@ def predict(matches, home, away):
     aA = get_ms(matches, away, "away")
     if not hH or not aA: return None
     lgH, lgA = lg_avgs(matches)
-    hAtk = wavg(hH, lambda m: m["HC"]) / lgH if lgH else 1
-    aAtk = wavg(aA, lambda m: m["AC"]) / lgA if lgA else 1
+
+    # Base corner attack index
+    hBaseAtk = wavg(hH, lambda m: m["HC"]) / lgH if lgH else 1
+    aBaseAtk = wavg(aA, lambda m: m["AC"]) / lgA if lgA else 1
+
+    # Tactical defense index
     hDef = tact_def(matches, home, "home")
     aDef = tact_def(matches, away, "away")
-    pH = round(lgH * hAtk * aDef, 2)
-    pA = round(lgA * aAtk * hDef, 2)
+
+    # Extra stat indices
+    has_shots = any(m.get("HS",0) > 0 for m in hH)
+
+    def lg_avg_field(field):
+        ws = sum(sw(m) for m in matches)
+        return sum(m.get(field,0)*sw(m) for m in matches)/ws if ws else 0
+
+    def team_avg_field(ms, field):
+        return wavg(ms, lambda m: m.get(field, 0))
+
+    def shot_idx(ms, is_home):
+        lg = lg_avg_field("HS" if is_home else "AS")
+        if lg < 0.5: return 1.0
+        return team_avg_field(ms, "HS" if is_home else "AS") / lg
+
+    def sot_inv_idx(ms, is_home):
+        shots = team_avg_field(ms, "HS" if is_home else "AS")
+        sot   = team_avg_field(ms, "HST" if is_home else "AST")
+        if shots < 0.5: return 1.0
+        ratio = sot / shots
+        return math.sqrt(0.35 / max(ratio, 0.05))
+
+    def foul_idx(ms, is_home):
+        lg = lg_avg_field("AF" if is_home else "HF")
+        if lg < 0.5: return 1.0
+        return team_avg_field(ms, "AF" if is_home else "HF") / lg
+
+    def yellow_idx(ms):
+        lg = lg_avg_field("HY") + lg_avg_field("AY")
+        if lg < 0.1: return 1.0
+        return (team_avg_field(ms,"HY") + team_avg_field(ms,"AY")) / lg
+
+    W = {"base":0.55, "shot":0.25, "sot":0.08, "foul":0.08, "yell":0.04}
+
+    hCompAtk = (W["base"]*hBaseAtk +
+                W["shot"]*(shot_idx(hH,True) if has_shots else 1.0) +
+                W["sot"] *(sot_inv_idx(hH,True) if has_shots else 1.0) +
+                W["foul"]*foul_idx(hH,True) +
+                W["yell"]*yellow_idx(hH))
+
+    aCompAtk = (W["base"]*aBaseAtk +
+                W["shot"]*(shot_idx(aA,False) if has_shots else 1.0) +
+                W["sot"] *(sot_inv_idx(aA,False) if has_shots else 1.0) +
+                W["foul"]*foul_idx(aA,False) +
+                W["yell"]*yellow_idx(aA))
+
+    pH = round(lgH * hCompAtk * aDef, 2)
+    pA = round(lgA * aCompAtk * hDef, 2)
     pT = round(pH + pA, 2)
     thresholds = [6.5, 7.5, 8.5, 9.5, 10.5, 11.5, 12.5]
     probs = {str(t): round(poisson_over(pH, pA, t)*100, 1) for t in thresholds}

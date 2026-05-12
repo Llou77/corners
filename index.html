@@ -178,7 +178,7 @@ footer{margin-top:40px;padding-top:20px;border-top:1px solid var(--brd);font-siz
   <div class="sgrid">
     <div class="sc"><div class="sl">Hazai t&aacute;madó index</div><div class="sv c1" id="shf">&#8212;</div></div>
     <div class="sc"><div class="sl">Liga átlag / meccs</div><div class="sv" id="slg">&#8212;</div></div>
-    <div class="sc"><div class="sl">Vendég támadó index</div><div class="sv c2" id="saf">&#8212;</div></div>
+    <div class="sc"><div class="sl">Vendég kompozit index</div><div class="sv c2" id="saf">&#8212;</div></div>
     <div class="sc"><div class="sl">Taktikai véd. index (hazai ellen)</div><div class="sv" id="sha">&#8212;</div></div>
     <div class="sc"><div class="sl">Adatbázis meccsek</div><div class="sv" id="stm">&#8212;</div></div>
     <div class="sc"><div class="sl">Taktikai véd. index (vendég ellen)</div><div class="sv" id="saa">&#8212;</div></div>
@@ -186,7 +186,7 @@ footer{margin-top:40px;padding-top:20px;border-top:1px solid var(--brd);font-siz
   <div class="rp2"><h4>Val&oacute;sz&iacute;n&#369;s&eacute;gi tartom&aacute;nyok</h4><div id="rb"></div></div>
   <div class="fp"><h4>Legut&oacute;bbi meccsek &mdash; k&eacute;k = hazai sz&ouml;gletek &bull; narancs = vend&eacute;g sz&ouml;gletek</h4><div class="fgrid" id="fg"></div></div>
   <div class="mp">
-    <div class="mt2">Model v0.5 &bull; Taktikai index + Hazai/vendég forma + Szezon-pozíció súlyozás</div>
+    <div class="mt2">Model v0.5 &bull; +Lövések, SoT, Faultok, Sárga lapok &bull; Taktikai index + Hazai/vendég forma + Szezon-pozíció súlyozás</div>
     <div class="mfml" id="mfml">&#8212;</div>
     <div class="cbar"><div class="clbl">Adatbiztons&aacute;g</div><div class="ctrk"><div class="cfil" id="cfil" style="width:0%"></div></div><div class="cpct" id="cpct">&#8212;</div></div>
   </div>
@@ -224,10 +224,15 @@ function parseCSV(text, label) {
     if (!v[hIdx] || !v[aIdx]) continue;
     var hc = parseFloat(v[hcIdx]), ac = parseFloat(v[acIdx]);
     if (isNaN(hc) || isNaN(ac)) continue;
-    rows.push({ HomeTeam: v[hIdx].trim(), AwayTeam: v[aIdx].trim(),
+    var row = { HomeTeam: v[hIdx].trim(), AwayTeam: v[aIdx].trim(),
                 HC: hc, AC: ac,
                 Date: dtIdx >= 0 ? v[dtIdx].trim() : '',
-                _s: label });
+                _s: label };
+    ['HS','AS','HST','AST','HF','AF','HY','AY','HR','AR'].forEach(function(f){
+      var fi = hdrs.indexOf(f);
+      row[f] = fi >= 0 ? (parseFloat(v[fi]) || 0) : 0;
+    });
+    rows.push(row);
   }
   return rows;
 }
@@ -452,6 +457,76 @@ function poissonOver(lH, lA, threshold) {
   return Math.min(prob, 1);
 }
 
+// ── EXTRA STAT HELPERS ───────────────────────────────────────────────────────
+
+function mf(m, field) {
+  var v = parseFloat(m[field]);
+  return isNaN(v) ? 0 : v;
+}
+
+// Liga átlagok egy adott mezőre, szezon-súlyozással
+function lgAvgField(field) {
+  var w = 0, s = 0;
+  AM.forEach(function(m){
+    var wt = sw(m);
+    s += mf(m, field) * wt;
+    w += wt;
+  });
+  return w > 0 ? s / w : 0;
+}
+
+// Csapat átlaga egy mezőre (hazai/vendég szétválasztva), szezon+recency súlyozással
+function teamAvgField(matches, field) {
+  return wavgCombined(matches, function(m){ return mf(m, field); });
+}
+
+// Lövés-alapú támadó index (hazai: HS, vendég: AS)
+function shotIdx(matches, isHome) {
+  var lg = isHome ? lgAvgField('HS') : lgAvgField('AS');
+  if (lg < 0.5) return 1.0;
+  var team = teamAvgField(matches, isHome ? 'HS' : 'AS');
+  return team / lg;
+}
+
+// Kapura lövés arány index: alacsony SoT/lövés → több blokk → több szöglet (inverz)
+function sotInverseIdx(matches, isHome) {
+  var shots = teamAvgField(matches, isHome ? 'HS' : 'AS');
+  var sot   = teamAvgField(matches, isHome ? 'HST' : 'AST');
+  if (shots < 0.5) return 1.0;
+  var ratio = sot / shots;
+  var lgRatio = 0.35; // Liga átlag SoT arány
+  // Alacsonyabb arány = több blokk = több szöglet
+  return ratio > 0.05 ? Math.sqrt(lgRatio / ratio) : 1.0; // sqrt = mérsékelt hatás
+}
+
+// Foul nyomás index: ellenfél több faultol → több set piece → több szöglet
+function foulIdx(matches, isHome) {
+  var lg = isHome ? lgAvgField('AF') : lgAvgField('HF'); // ellenfél faultjai
+  if (lg < 0.5) return 1.0;
+  var oppFouls = teamAvgField(matches, isHome ? 'AF' : 'HF');
+  return oppFouls / lg;
+}
+
+// Sárga lap index: agresszív játék → több faultolás → több szöglet
+function yellowIdx(matches) {
+  var lg = (lgAvgField('HY') + lgAvgField('AY'));
+  if (lg < 0.1) return 1.0;
+  var teamYellow = teamAvgField(matches, 'HY') + teamAvgField(matches, 'AY');
+  return teamYellow / lg;
+}
+
+// ── MODELL SÚLYOK ─────────────────────────────────────────────────────────────
+// Alap szöglet index (attack/defense): 55%
+// Lövés volumen index:                 25%
+// Kapura lövés arány (inverz):          8%
+// Foul nyomás index:                    8%
+// Sárga lap index:                      4%
+var W = { base: 0.55, shot: 0.25, sot: 0.08, foul: 0.08, yell: 0.04 };
+
+function compositeAtk(baseIdx, shotI, sotI, foulI, yellI) {
+  return W.base * baseIdx + W.shot * shotI + W.sot * sotI + W.foul * foulI + W.yell * yellI;
+}
+
 // ── MAIN CALC ────────────────────────────────────────────────────────────────
 function calc(ht, at, win) {
   var hH = getMs(ht, 'home', win);
@@ -461,28 +536,40 @@ function calc(ht, at, win) {
 
   var lg = lgAvgs();
 
-  // C) Home/Away separate: attack = corners generated, defense = corners conceded
-  var hFor = wavgCombined(hH, function(m){return m.HC;}); // Home team corners at home
-  var aFor = wavgCombined(aA, function(m){return m.AC;}); // Away team corners away
+  // Alap corner-alapú támadó index
+  var hFor = wavgCombined(hH, function(m){return m.HC;});
+  var aFor = wavgCombined(aA, function(m){return m.AC;});
+  var hBaseAtk = lg.H > 0 ? hFor / lg.H : 1;
+  var aBaseAtk = lg.A > 0 ? aFor / lg.A : 1;
 
-  // Attack indices (relative to league)
-  var hAtk = lg.H > 0 ? hFor / lg.H : 1;
-  var aAtk = lg.A > 0 ? aFor / lg.A : 1;
+  // Taktikai védekezési index (corner-alapú)
+  var hDefIdx = tacticalDefIdx(ht, 'home');
+  var aDefIdx = tacticalDefIdx(at, 'away');
 
-  // A) Tactical defense index: how many corners does the OPPONENT get vs this team?
-  // hDef = how many corners Away teams get when playing AT home_team's ground
-  // aDef = how many corners Home teams get when Away_team is defending away
-  var hDefIdx = tacticalDefIdx(ht, 'home'); // corners conceded by ht at home (= away team's corners)
-  var aDefIdx = tacticalDefIdx(at, 'away'); // corners conceded by at away (= home team's corners)
+  // Van-e lövés adat?
+  var hasShotData = hH.some(function(m){ return mf(m,'HS') > 0; }) &&
+                    aA.some(function(m){ return mf(m,'AS') > 0; });
 
-  // Expected corners:
-  // Home corners = lg_home_avg * home_attack_idx * away_defensive_style_idx
-  // Away corners = lg_away_avg * away_attack_idx * home_defensive_style_idx
-  var pH = parseFloat((lg.H * hAtk * aDefIdx).toFixed(2));
-  var pA = parseFloat((lg.A * aAtk * hDefIdx).toFixed(2));
+  // Extra indexek
+  var hShotI = hasShotData ? shotIdx(hH, true)       : 1.0;
+  var aShotI = hasShotData ? shotIdx(aA, false)      : 1.0;
+  var hSotI  = hasShotData ? sotInverseIdx(hH, true) : 1.0;
+  var aSotI  = hasShotData ? sotInverseIdx(aA, false): 1.0;
+  var hFoulI = foulIdx(hH, true);
+  var aFoulI = foulIdx(aA, false);
+  var hYellI = yellowIdx(hH);
+  var aYellI = yellowIdx(aA);
+
+  // Kompozit támadó indexek
+  var hCompAtk = compositeAtk(hBaseAtk, hShotI, hSotI, hFoulI, hYellI);
+  var aCompAtk = compositeAtk(aBaseAtk, aShotI, aSotI, aFoulI, aYellI);
+
+  // Várható szögletek
+  var pH = parseFloat((lg.H * hCompAtk * aDefIdx).toFixed(2));
+  var pA = parseFloat((lg.A * aCompAtk * hDefIdx).toFixed(2));
   var pT = parseFloat((pH + pA).toFixed(2));
 
-  // Poisson thresholds
+  // Poisson valószínűségek
   var thresholds = [6.5, 7.5, 8.5, 9.5, 10.5, 11.5, 12.5];
   var poisProbs = {};
   thresholds.forEach(function(t){
@@ -495,11 +582,16 @@ function calc(ht, at, win) {
     pH: pH, pA: pA, pT: pT,
     hFor: parseFloat(hFor.toFixed(2)),
     aFor: parseFloat(aFor.toFixed(2)),
-    hAtk: parseFloat(hAtk.toFixed(3)),
-    aAtk: parseFloat(aAtk.toFixed(3)),
+    hAtk: parseFloat(hBaseAtk.toFixed(3)),
+    aAtk: parseFloat(aBaseAtk.toFixed(3)),
+    hCompAtk: parseFloat(hCompAtk.toFixed(3)),
+    aCompAtk: parseFloat(aCompAtk.toFixed(3)),
     hDefIdx: parseFloat(hDefIdx.toFixed(3)),
     aDefIdx: parseFloat(aDefIdx.toFixed(3)),
+    hShotI: hasShotData ? parseFloat(hShotI.toFixed(3)) : null,
+    aShotI: hasShotData ? parseFloat(aShotI.toFixed(3)) : null,
     lgAvg: parseFloat((lg.H + lg.A).toFixed(2)),
+    hasShotData: hasShotData,
     poisProbs: poisProbs, thresholds: thresholds,
     conf: conf, tm: AM.length,
     hR: hH.slice(0,6), aR: aA.slice(0,6)
@@ -533,8 +625,8 @@ function disp(r, ht, at) {
   document.getElementById('rtot').textContent = r.pT.toFixed(1);
 
   // Stats grid
-  document.getElementById('shf').textContent = r.hAtk.toFixed(2) + 'x';
-  document.getElementById('saf').textContent = r.aAtk.toFixed(2) + 'x';
+  document.getElementById('shf').textContent = (r.hCompAtk || r.hAtk).toFixed(2) + 'x';
+  document.getElementById('saf').textContent = (r.aCompAtk || r.aAtk).toFixed(2) + 'x';
   document.getElementById('slg').textContent = r.lgAvg.toFixed(1);
   document.getElementById('sha').textContent = r.hDefIdx.toFixed(2) + 'x';
   document.getElementById('saa').textContent = r.aDefIdx.toFixed(2) + 'x';
@@ -590,8 +682,8 @@ function disp(r, ht, at) {
 
   // Model info
   document.getElementById('mfml').textContent =
-    'H: lg('+r.lgAvg.toFixed(1)+') x atk('+r.hAtk+') x tact_def('+r.aDefIdx+') | '+
-    'A: lg('+r.lgAvg.toFixed(1)+') x atk('+r.aAtk+') x tact_def('+r.hDefIdx+')';
+    'H: base(' + r.hAtk + ') shot(' + (r.hShotI||'n/a') + ') def(' + r.aDefIdx + ') → ' + r.hCompAtk +
+    ' | A: base(' + r.aAtk + ') shot(' + (r.aShotI||'n/a') + ') def(' + r.hDefIdx + ') → ' + r.aCompAtk;
 
   document.getElementById('cpct').textContent = r.conf + '%';
   setTimeout(function(){ document.getElementById('cfil').style.width = r.conf+'%'; }, 100);
