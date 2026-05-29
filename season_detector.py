@@ -80,7 +80,8 @@ def detect_league(league_prefix, league_name):
         "weightingMethod": "match_count_x_time_factor (1.0/0.6/0.3)"
     }
 
-    print(f"    Súlyok: {[(s['label'], f\"{s['weight']*100:.1f}%\") for s in seasons]}")
+    weights_str = [(s['label'], str(round(s['weight']*100, 1)) + '%') for s in seasons]
+    print(f"    Súlyok: {weights_str}")
     return config
 
 def main():
