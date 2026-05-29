@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Corner Prophet — PL Szöglet Előrejelző</title>
+<title>Corner Prophet — Szöglet Előrejelző</title>
 <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;600;700;900&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
 :root{--bg:#0a0c10;--surf:#10141c;--surf2:#161c28;--brd:#1e2736;--acc:#00e5ff;--acc2:#ff6b35;--acc3:#a8ff3e;--txt:#e8eaf0;--dim:#5a6478;--mid:#8892a4}
@@ -115,6 +115,14 @@ footer{margin-top:40px;padding-top:20px;border-top:1px solid var(--brd);font-siz
 .ss-val.g{color:var(--acc3)}.ss-val.w{color:var(--acc)}.ss-val.b{color:var(--acc2)}
 .divider-label{font-family:'Barlow Condensed',sans-serif;font-size:.85rem;font-weight:600;letter-spacing:.15em;text-transform:uppercase;color:var(--dim);margin:28px 0 16px;display:flex;align-items:center;gap:10px}
 .divider-label::after{content:'';flex:1;height:1px;background:var(--brd)}
+.league-section{margin-bottom:16px}
+.league-header{font-family:'Barlow Condensed',sans-serif;font-size:.75rem;font-weight:600;letter-spacing:.18em;text-transform:uppercase;color:var(--dim);padding:8px 0;border-bottom:1px solid var(--brd);margin-bottom:10px;display:flex;align-items:center;gap:8px}
+.league-flag{font-size:1rem}
+.no-matches-msg{color:var(--dim);font-size:.72rem;text-align:center;padding:16px;font-style:italic}
+.lg-sel-wrap{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px}
+.lg-btn{background:var(--surf2);border:1px solid var(--brd);color:var(--dim);font-family:'Barlow Condensed',sans-serif;font-size:.8rem;font-weight:600;letter-spacing:.1em;text-transform:uppercase;padding:6px 14px;cursor:pointer;transition:all .2s}
+.lg-btn.active{background:var(--acc);color:var(--bg);border-color:var(--acc)}
+.lg-btn:hover:not(.active){border-color:var(--mid);color:var(--mid)}
 </style>
 </head>
 <body>
@@ -124,7 +132,7 @@ footer{margin-top:40px;padding-top:20px;border-top:1px solid var(--brd);font-siz
     <div class="logo-ico">&#x26BD;</div>
     <div class="logo-text">
       <h1>Corner Prophet</h1>
-      <p>Premier League &bull; Sz&ouml;glet El&#337;rejelz&#337; &bull; v0.5</p>
+      <p>Multi-Liga &bull; Sz&ouml;glet El&#337;rejelz&#337; &bull; v1.0</p>
     </div>
   </div>
   <div class="badge"><div class="dot"></div><span>2023&ndash;26 szezon</span></div>
@@ -144,13 +152,20 @@ footer{margin-top:40px;padding-top:20px;border-top:1px solid var(--brd);font-siz
 
 <div class="today-panel" id="today-panel">
   <div class="today-title">
-    &#x26BD; Mai Premier League meccsek
+    &#x26BD; Mai m&eacute;rk&#337;z&eacute;sek
     <span class="today-date" id="today-date"></span>
   </div>
   <div id="today-matches"><div class="mc-nodata">Adatok betöltése...</div></div>
 </div>
 
 <div class="divider-label">Egyedi elemzés</div>
+<div class="lg-sel-wrap" id="lg-sel">
+  <button class="lg-btn active" onclick="setLeague('E0')" id="btn-E0">🏴󠁧󠁢󠁥󠁮󠁧󠁿 Premier League</button>
+  <button class="lg-btn" onclick="setLeague('F1')" id="btn-F1">🇫🇷 Ligue 1</button>
+  <button class="lg-btn" onclick="setLeague('SP1')" id="btn-SP1">🇪🇸 La Liga</button>
+  <button class="lg-btn" onclick="setLeague('D1')" id="btn-D1">🇩🇪 Bundesliga</button>
+  <button class="lg-btn" onclick="setLeague('I1')" id="btn-I1">🇮🇹 Serie A</button>
+</div>
 
 <div class="panel">
   <div class="panel-title">&#x26BD; M&eacute;rk&#337;z&eacute;s kiv&aacute;laszt&aacute;sa</div>
@@ -186,14 +201,14 @@ footer{margin-top:40px;padding-top:20px;border-top:1px solid var(--brd);font-siz
   <div class="rp2"><h4>Val&oacute;sz&iacute;n&#369;s&eacute;gi tartom&aacute;nyok</h4><div id="rb"></div></div>
   <div class="fp"><h4>Legut&oacute;bbi meccsek &mdash; k&eacute;k = hazai sz&ouml;gletek &bull; narancs = vend&eacute;g sz&ouml;gletek</h4><div class="fgrid" id="fg"></div></div>
   <div class="mp">
-    <div class="mt2">Model v0.5 &bull; +Lövések, SoT, Faultok, Sárga lapok &bull; Taktikai index + Hazai/vendég forma + Szezon-pozíció súlyozás</div>
+    <div class="mt2">Model v1.0 &bull; Multi-Liga &bull; Kompozit index (lövések, SoT, faultok, sárga lapok) &bull; Adaptív szezon-súlyozás</div>
     <div class="mfml" id="mfml">&#8212;</div>
     <div class="cbar"><div class="clbl">Adatbiztons&aacute;g</div><div class="ctrk"><div class="cfil" id="cfil" style="width:0%"></div></div><div class="cpct" id="cpct">&#8212;</div></div>
   </div>
 </div>
 
 <footer>
-  <span>Adatforr&aacute;s: football-data.co.uk &bull; Szezonok: automatikus (3 legfrissebb)</span>
+  <span>Adatforr&aacute;s: football-data.co.uk &bull; Lig&aacute;k: PL, Ligue 1, La Liga, Bundesliga, Serie A</span>
   <span>Corner Prophet &bull; Csak t&aacute;j&eacute;koztat&oacute; c&eacute;lra &bull; Nem fogad&aacute;si tan&aacute;cs</span>
 </footer>
 </div>
@@ -203,11 +218,16 @@ footer{margin-top:40px;padding-top:20px;border-top:1px solid var(--brd);font-siz
 // CSV-k forrása: football-data.co.uk
 // GitHub Pages-en a /data/ mappából tölt; ha nem sikerül, beégetett sample adat
 // CSV fajlok dinamikusan a season_config.json alapjan
-var CSV_FILES = [
-  'data/E0_2526.csv',
-  'data/E0_2425.csv',
-  'data/E0_2324.csv'
-]; // fallback - felulirja a season_config ha elerheto
+// Liga konfiguráció
+var LEAGUE_CONFIGS = {
+  'E0':  { name: 'Premier League',  flag: '🏴󠁧󠁢󠁥󠁮󠁧󠁿', files: ['data/E0_2526.csv','data/E0_2425.csv','data/E0_2324.csv'] },
+  'F1':  { name: 'Ligue 1',         flag: '🇫🇷', files: ['data/F1_2526.csv','data/F1_2425.csv','data/F1_2324.csv'] },
+  'SP1': { name: 'La Liga',         flag: '🇪🇸', files: ['data/SP1_2526.csv','data/SP1_2425.csv','data/SP1_2324.csv'] },
+  'D1':  { name: 'Bundesliga',      flag: '🇩🇪', files: ['data/D1_2526.csv','data/D1_2425.csv','data/D1_2324.csv'] },
+  'I1':  { name: 'Serie A',         flag: '🇮🇹', files: ['data/I1_2526.csv','data/I1_2425.csv','data/I1_2324.csv'] },
+};
+var CURRENT_LEAGUE = 'E0';
+var CSV_FILES = LEAGUE_CONFIGS['E0'].files; // fallback
 
 var AM = [], T = [];
 
@@ -246,9 +266,11 @@ function setSt(cls, txt) {
 async function loadAll() {
   setSt('ld', 'Adatok betöltése...');
 
-  // Dinamikus szezon konfig betöltése
+  // Dinamikus szezon konfig betöltése (liga-specifikus)
   try {
-    var cfgResp = await fetch('data/season_config.json');
+    var cfgUrl = 'data/season_config_' + CURRENT_LEAGUE + '.json';
+    var cfgResp = await fetch(cfgUrl);
+    if (!cfgResp.ok) cfgResp = await fetch('data/season_config.json');
     if (cfgResp.ok) {
       var cfg = await cfgResp.json();
       CSV_FILES = cfg.seasons.map(function(s){ return s.file; });
@@ -272,7 +294,7 @@ async function loadAll() {
       if (!r.ok) throw new Error('HTTP ' + r.status);
       var txt = await r.text();
       // Szezon cimke kinyerese a fajlnévbol (pl. E0_2526.csv -> 2025/26)
-  var match2 = CSV_FILES[i].match(/E0_(\d{2})(\d{2})\.csv/);
+  var match2 = CSV_FILES[i].match(/_(\d{2})(\d{2})\.csv/);
   var label = match2
     ? '20'+match2[1]+'/20'+match2[2]
     : CSV_FILES[i];
@@ -695,6 +717,9 @@ function disp(r, ht, at) {
 async function loadTodayPanel() {
   var today = new Date().toISOString().slice(0,10);
   document.getElementById('today-date').textContent = today;
+  document.getElementById('today-panel').querySelector('.today-title').innerHTML =
+    '&#x26BD; Mai m&eacute;rk&#337;z&eacute;sek &mdash; ' + today +
+    ' <span class="today-date" id="today-date"></span>';
 
   // Load summary
   try {
@@ -734,42 +759,87 @@ async function loadTodayPanel() {
       container.innerHTML = '<div class="mc-nodata">Ma nincs előrejelzett Premier League mérkőzés.<br><span style="font-size:.65rem;color:var(--dim)">A becslések minden nap 10:00-kor frissülnek.</span></div>';
       return;
     }
-    container.innerHTML = todayPreds.map(function(e){
-      var probsHtml = '';
-      if (e.probs) {
-        probsHtml = Object.entries(e.probs).map(function(kv){
-          var t = kv[0], p = kv[1];
-          var cls = p >= 60 ? 'hi' : p >= 45 ? 'mid' : '';
-          return '<span class="mc-prob ' + cls + '">' + t + ': ' + p + '%</span>';
-        }).join('');
-      }
-      return '<div class="match-card">' +
-        '<div class="mc-team">' +
-          '<div class="mc-name">' + e.home + '</div>' +
-          '<div class="mc-corners home">' + e.predH + '</div>' +
-          '<div style="font-size:.58rem;color:var(--dim);margin-top:3px">várható</div>' +
-        '</div>' +
-        '<div class="mc-mid">' +
-          '<div class="mc-time">' + (e.date || '') + '</div>' +
-          '<div class="mc-total-box">' +
-            '<div class="mc-total-lbl">össz</div>' +
-            '<div class="mc-total-val">' + e.predT + '</div>' +
+    // Renderelés renderMatchCard függvénnyel
+    var byLeague = {};
+    todayPreds.forEach(function(e) {
+      var lg = e.league || 'PL';
+      if (!byLeague[lg]) byLeague[lg] = [];
+      byLeague[lg].push(e);
+    });
+    var leagueOrder = ['PL','FL1','PD','BL1','SA'];
+    var leagueNames = {'PL':'Premier League','FL1':'Ligue 1','PD':'La Liga','BL1':'Bundesliga','SA':'Serie A'};
+    var leagueFlags = {'PL':'🏴󠁧󠁢󠁥󠁮󠁧󠁿','FL1':'🇫🇷','PD':'🇪🇸','BL1':'🇩🇪','SA':'🇮🇹'};
+    var html_parts = [];
+    leagueOrder.forEach(function(lg) {
+      if (!byLeague[lg] || !byLeague[lg].length) return;
+      html_parts.push('<div class="league-section"><div class="league-header"><span class="league-flag">' +
+        (leagueFlags[lg]||'⚽') + '</span>' + (leagueNames[lg]||lg) + '</div>');
+      byLeague[lg].forEach(function(e) {
+        var probsHtml = '';
+        if (e.probs) {
+          probsHtml = Object.entries(e.probs).map(function(kv){
+            var t = kv[0], p = kv[1];
+            var cls = p >= 60 ? 'hi' : p >= 45 ? 'mid' : '';
+            return '<span class="mc-prob ' + cls + '">' + t + ': ' + p + '%</span>';
+          }).join('');
+        }
+        html_parts.push('<div class="match-card">' +
+          '<div class="mc-team">' +
+            '<div class="mc-name">' + e.home + '</div>' +
+            '<div class="mc-corners home">' + e.predH + '</div>' +
+            '<div style="font-size:.58rem;color:var(--dim);margin-top:3px">várható</div>' +
           '</div>' +
-          (e.actualT !== null && e.actualT !== undefined ?
-            '<div style="margin-top:6px;font-size:.65rem;color:var(--acc3)">Valódi: ' + e.actualT + ' (' + (e.error > 0 ? '+' : '') + e.error + ')</div>' : '') +
-        '</div>' +
-        '<div class="mc-team">' +
-          '<div class="mc-name">' + e.away + '</div>' +
-          '<div class="mc-corners away">' + e.predA + '</div>' +
-          '<div style="font-size:.58rem;color:var(--dim);margin-top:3px">várható</div>' +
-        '</div>' +
-        '</div>' +
-        '<div class="mc-probs">' + probsHtml + '</div>';
-    }).join('');
+          '<div class="mc-mid">' +
+            '<div class="mc-time">' + (e.date || '') + '</div>' +
+            '<div class="mc-total-box"><div class="mc-total-lbl">össz</div>' +
+            '<div class="mc-total-val">' + e.predT + '</div></div>' +
+            (e.actualT !== null && e.actualT !== undefined ?
+              '<div style="margin-top:6px;font-size:.65rem;color:var(--acc3)">Valódi: ' + e.actualT +
+              ' (' + (e.error > 0 ? '+' : '') + e.error + ')</div>' : '') +
+          '</div>' +
+          '<div class="mc-team">' +
+            '<div class="mc-name">' + e.away + '</div>' +
+            '<div class="mc-corners away">' + e.predA + '</div>' +
+            '<div style="font-size:.58rem;color:var(--dim);margin-top:3px">várható</div>' +
+          '</div></div>' +
+          '<div class="mc-probs">' + probsHtml + '</div>');
+      });
+      html_parts.push('</div>');
+    });
+    container.innerHTML = html_parts.join('');
   } catch(e) {
     document.getElementById('today-matches').innerHTML =
       '<div class="mc-nodata">A napi becslések 10:00-kor töltődnek be.<br><span style="font-size:.65rem;color:var(--dim)">GitHub Actions futtatja a modellt automatikusan.</span></div>';
   }
+}
+
+// ── LIGA VÁLTÓ ───────────────────────────────────────────────────────────────
+function setLeague(leagueCode) {
+  if (CURRENT_LEAGUE === leagueCode) return;
+  CURRENT_LEAGUE = leagueCode;
+  CSV_FILES = LEAGUE_CONFIGS[leagueCode].files;
+  SEASON_W = {};
+  AM = []; T = [];
+
+  // Gombok frissítése
+  document.querySelectorAll('.lg-btn').forEach(function(btn) {
+    btn.classList.remove('active');
+  });
+  var activeBtn = document.getElementById('btn-' + leagueCode);
+  if (activeBtn) activeBtn.classList.add('active');
+
+  // Reseteljük a csapat selecteket
+  var ht = document.getElementById('ht');
+  var at = document.getElementById('at');
+  if (ht) ht.innerHTML = '<option value="">— Betöltés... —</option>';
+  if (at) at.innerHTML = '<option value="">— Betöltés... —</option>';
+
+  // Reseteljük az eredmény panelt
+  var rp = document.getElementById('rp');
+  if (rp) rp.style.display = 'none';
+
+  setSt('ld', LEAGUE_CONFIGS[leagueCode].name + ' betöltése...');
+  loadAll();
 }
 
 loadAll();
