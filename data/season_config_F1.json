@@ -1,0 +1,35 @@
+{
+  "league": "F1",
+  "leagueName": "Ligue 1",
+  "seasons": [
+    {
+      "label": "2025/2026",
+      "code": "2526",
+      "file": "data/F1_2526.csv",
+      "matches": 305,
+      "weight": 0.5255
+    },
+    {
+      "label": "2024/2025",
+      "code": "2425",
+      "file": "data/F1_2425.csv",
+      "matches": 306,
+      "weight": 0.3163
+    },
+    {
+      "label": "2023/2024",
+      "code": "2324",
+      "file": "data/F1_2324.csv",
+      "matches": 306,
+      "weight": 0.1582
+    }
+  ],
+  "weights": {
+    "2025/2026": 0.5255,
+    "2024/2025": 0.3163,
+    "2023/2024": 0.1582
+  },
+  "current": "2025/2026",
+  "updatedAt": "2026-05-29T14:47:00.552786+00:00",
+  "weightingMethod": "match_count_x_time_factor (1.0/0.6/0.3)"
+}

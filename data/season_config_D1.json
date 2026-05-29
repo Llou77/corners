@@ -1,0 +1,35 @@
+{
+  "league": "D1",
+  "leagueName": "Bundesliga",
+  "seasons": [
+    {
+      "label": "2025/2026",
+      "code": "2526",
+      "file": "data/D1_2526.csv",
+      "matches": 306,
+      "weight": 0.5263
+    },
+    {
+      "label": "2024/2025",
+      "code": "2425",
+      "file": "data/D1_2425.csv",
+      "matches": 306,
+      "weight": 0.3158
+    },
+    {
+      "label": "2023/2024",
+      "code": "2324",
+      "file": "data/D1_2324.csv",
+      "matches": 306,
+      "weight": 0.1579
+    }
+  ],
+  "weights": {
+    "2025/2026": 0.5263,
+    "2024/2025": 0.3158,
+    "2023/2024": 0.1579
+  },
+  "current": "2025/2026",
+  "updatedAt": "2026-05-29T14:47:05.653398+00:00",
+  "weightingMethod": "match_count_x_time_factor (1.0/0.6/0.3)"
+}
