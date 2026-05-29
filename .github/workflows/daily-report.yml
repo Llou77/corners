@@ -3,7 +3,7 @@ name: Corner Prophet - Napi Futtatások
 on:
   schedule:
     - cron: '0 4 * * *'   # 04:00 UTC = 06:00 Budapest — Eredmény ellenőrzés
-    - cron: '0 6 * * *'   # 06:00 UTC = 08:00 Budapest (max. ~2.5h késéssel ~10:30-ig)
+    - cron: '0 6 * * *'   # 06:00 UTC = 08:00 Budapest — Napi becslés + Telegram
   workflow_dispatch:
     inputs:
       job:
@@ -40,7 +40,7 @@ jobs:
 
   daily-predict:
     if: >
-      (github.event_name == 'schedule' && github.event.schedule == '0 8 * * *') ||
+      (github.event_name == 'schedule' && github.event.schedule == '0 6 * * *') ||
       (github.event_name == 'workflow_dispatch' && (github.event.inputs.job == 'predict' || github.event.inputs.job == 'both'))
     runs-on: ubuntu-latest
     steps:
@@ -48,7 +48,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-      - name: Napi becslés futtatása
+      - name: Napi becslés + Telegram
         env:
           FDORG_TOKEN: ${{ secrets.FDORG_TOKEN }}
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
